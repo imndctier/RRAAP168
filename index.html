@@ -1,322 +1,985 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>地方創生利他行動168專案 - 廊道地圖</title> <style>
-      /* --------------------------- 基礎與置中樣式 --------------------------- */
-      /* 設置 HTML 和 Body 高度為 100% */
-      html, body {
-        height: 100%;
-        margin: 0;
-        overflow-x: hidden; 
-        font-family: Arial, sans-serif;
-        background-color: #f4f4f4;
-        
-        /* 核心置中樣式：將 body 設為 flex 容器 */
-        display: flex;
-        justify-content: center; /* 水平置中 (將 map-wrapper 移到中央) */
-        align-items: center; /* 垂直置中 (選配) */
-      }
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>地方創生利他行動168專案 - 廊道地圖</title>
+   <!-- 載入 Tailwind CSS -->
+   <script src="https://cdn.tailwindcss.com"></script>
+   <style>
+       body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #12687c 50%, #51a898); }
+
+
+       /* --- SVG 地圖樣式 --- */
+       #interactive-map {
+           width: 100%;
+           height: 100%;
+           max-height: 80vh;
+           border-radius: 16px;
+           object-fit: contain;
+       }
+
+
+       .map-area {
+           fill: #4c7cff;
+           opacity: 0.0;
+           stroke: #ffffff;
+           stroke-width: 15;
+           transition: opacity 0.3s, stroke-width 0.3s;
+           cursor: pointer;
+           pointer-events: all;
+       }
+
+
+       .map-area:hover {
+           opacity: 0.3;
+           stroke: #ffc107;
+           stroke-width: 30;
+       }
+
+
+       .map-area.selected {
+           opacity: 0.35;
+           fill: #065f46;
+           stroke: #064e3b;
+           stroke-width: 25;
+       }
+
+
+       /* --- Dialog/Modal 樣式 (僅用於行動版) --- */
+       .dialog-modal {
+           position: fixed;
+           top: 0;
+           left: 0;
+           width: 100%;
+           height: 100%;
+           background-color: rgba(0, 0, 0, 0.6);
+           display: flex;
+           justify-content: center;
+           align-items: center;
+           z-index: 1000;
+           opacity: 0;
+           visibility: hidden;
+           pointer-events: none;
+           transition: opacity 0.3s, visibility 0.3s;
+           backdrop-filter: blur(4px);
+       }
       
-      .map-wrapper {
-        /* 預設為垂直佈局 (手機優先，將在桌面端被 media query 覆蓋) */
-        display: flex;
-        flex-direction: column; 
-        align-items: center; 
-        
-        height: 100%;
-        padding: 15px;
-        box-sizing: border-box; 
-        max-width: 90%; /* 限制容器寬度，讓置中效果更明顯 */
-      }
+       .dialog-modal.visible {
+           opacity: 1;
+           visibility: visible;
+           pointer-events: auto;
+       }
 
-      /* --------------------------- RWD 樣式 --------------------------- */
-      .img-fluid {
-        max-height: 100vh; 
-        max-width: 100%; 
-        width: auto;
-        height: auto;
-        display: block;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      }
+
+       .content-description p {
+           margin-bottom: 1rem;
+           line-height: 1.6;
+           color: #4b5563;
+       }
       
-      p {
-        font-size: 1.2rem;
-        margin: 15px 0 0 0; /* 手機垂直佈局下的間距 */
-        max-width: 100%; 
-        word-wrap: break-word;
-        line-height: 1.6;
-        padding: 15px;
-        border: 1px solid #ddd;
-        min-height: 150px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        background-color: white;
-      }
-
-      /* 桌面/平板佈局：寬度大於 950px 時，文字在右側，且允許垂直滾動 */
-      @media (min-width: 951px) {
-        .map-wrapper {
-          flex-direction: row; /* 切換為橫向佈局 */
-          align-items: flex-start; /* 確保內容頂部對齊 */
-          overflow-y: auto; /* 允許地圖 wrapper 內滾動 */
-          max-width: 1200px; /* 限制桌面寬度以保持居中效果 */
-        }
-        
-        p {
-            /* 桌面橫向佈局下的間距 */
-            margin-left: 20px;
-            margin-top: 0; 
-            max-width: 350px;
-            display: block; /* 確保桌面版顯示 */
-        }
-        
-        /* 隱藏手機 Modal 的內容 */
-        #mobile-modal {
-            display: none !important;
-        }
-      }
-
-      /* ------------------------- Modal 樣式 ------------------------- */
-      /* 確保 Modal 樣式在手機上能覆蓋全屏 */
-      #mobile-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
-        display: none; 
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-      }
-      #modal-content {
-        background-color: white;
-        padding: 20px;
-        margin: 15px;
-        border-radius: 8px;
-        max-width: 80%;
-        max-height: 80%;
-        overflow-y: auto;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        position: relative;
-      }
-      #modal-close {
-        position: absolute;
-        top: 10px;
-        right: 15px;
-        font-size: 24px;
-        font-weight: bold;
-        cursor: pointer;
-        color: #555;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="map-wrapper">
-      <img
-        src="https://raw.githubusercontent.com/AngChenWu/ChatGPT-Line-Bot/refs/heads/main/Map_A3-4-05.png" 
-        usemap="#image-map"
-        class="img-fluid"
-        id="Image-Maps"
-        alt="台灣地方創生願景地圖"
-      />
-      <p id="areaName">正在載入...</p>
-    </div>
-
-    <div id="mobile-modal">
-        <div id="modal-content">
-            <span id="modal-close">&times;</span>
-            <p id="modal-text"></p>
-        </div>
-    </div>
-    
-    <map name="image-map">
-      <area target="" alt="N1-七星照大都-從台北城到北海岸，串聯山城聚落、茶鄉文化與港灣歷史。茶香、礦脈與潮聲交織出北台灣的文化節奏，城市與自然相互呼應，形成山港交融的生活長廊。地方創生以文化保存、茶旅體驗與老街再生為主軸，展現北區多元人文風貌。" title="N1-七星照大都-從台北城到北海岸，串聯山城聚落、茶鄉文化與港灣歷史。茶香、礦脈與潮聲交織出北台灣的文化節奏，城市與自然相互呼應，形成山港交融的生活長廊。地方創生以文化保存、茶旅體驗與老街再生為主軸，展現北區多元人文風貌。" href="" coords="6025,1708,6137,1608,6131,1441,5870,1385,5821,1354,6025,1714,5889,1708,5703,1553,5560,1590,5486,1658,5455,1782,5641,1900,5808,1986,5548,1906,5387,1856,5219,1856,5095,1863,5027,1813,4965,1683,4909,1571,4909,1478,4897,1398,4971,1323,5021,1249,5046,1168,5126,1094,5188,1057,5263,1013,5356,982,5430,1013,5492,1094,5517,1162,5591,1218,5628,1261,5709,1311,5783,1323" shape="poly" data-lang-tag="N1-七星照大都">
-      <area target="" alt="N2-雙港迎風灣-從林口到大安，北台灣西岸展現風力、漁業與生態共構的濱海風光。風車林立、潮汐潟湖與漁港人文交織出「藍綠共生」的生活圖景。地方創生以濱海生態旅遊、綠能教育與漁村再生為主軸，打造永續新海岸。" title="N2-雙港迎風灣-從林口到大安，北台灣西岸展現風力、漁業與生態共構的濱海風光。風車林立、潮汐潟湖與漁港人文交織出「藍綠共生」的生活圖景。地方創生以濱海生態旅遊、綠能教育與漁村再生為主軸，打造永續新海岸。" href="" coords="4872,1428,4730,1422,4606,1435,4476,1497,4321,1559,4141,1583,4110,1714,4060,1831,3980,1943,3918,2073,3843,2197,3806,2370,3670,2532,3502,2643,3416,2786,3304,2984,3242,3120,3174,3201,3242,3275,3447,2984,3601,2811,3701,2618,3849,2439,3980,2265,4197,2017,4290,1862,4420,1763,4562,1645,4699,1571,4835,1490,4891,1478" shape="poly" data-lang-tag="N2-雙港迎風灣">
-      <area target="" alt="N3-嵙崁埤塘園-沿大漢溪串連三峽、大溪至中壢山麓平原，形成茶鄉、溪谷與工藝文化交織的生活軸帶。這裡融合自然景觀與人文技藝，從茶園山徑到老街工坊，展現北桃地區以文化手作、地方產業與青年返鄉為核心的創生能量。" title="N3-嵙崁埤塘園-沿大漢溪串連三峽、大溪至中壢山麓平原，形成茶鄉、溪谷與工藝文化交織的生活軸帶。這裡融合自然景觀與人文技藝，從茶園山徑到老街工坊，展現北桃地區以文化手作、地方產業與青年返鄉為核心的創生能量。" href="" coords="4891,1484,4798,1515,4711,1565,4587,1633,4507,1689,4445,1751,4370,1807,4314,1862,4283,1906,4246,1961,4240,2005,4296,2073,4327,2123,4364,2160,4414,2172,4463,2203,4519,2228,4575,2265,4624,2290,4668,2340,4723,2389,4810,2426,4878,2470,4947,2538,5002,2600,5052,2662,5071,2693,5114,2649,5033,2575,4984,2513,4922,2439,4885,2383,4866,2302,4891,2259,4934,2216,4984,2185,5033,2154,5071,2092,5108,2042,5139,1968,5126,1899,5064,1887,5027,1838,4971,1757,4934,1670,4909,1590,4897,1515" shape="poly" data-lang-tag="N3-嵙崁埤塘園">
-      <area target="" alt="N4-竹塹埔山關-橫跨新竹丘陵至科學園區，山林聚落與創新能量共構竹地新風貌。客庄文化蘊含匠藝溫度，青年返鄉以科技、設計與永續創新賦予產業新生命，展現竹鄉的文化轉型力。" title="N4-竹塹埔山關-橫跨新竹丘陵至科學園區，山林聚落與創新能量共構竹地新風貌。客庄文化蘊含匠藝溫度，青年返鄉以科技、設計與永續創新賦予產業新生命，展現竹鄉的文化轉型力。" href="" coords="4203,2000,4166,2056,4110,2118,4042,2198,3986,2260,3937,2329,3856,2415,3825,2477,3862,2527,3918,2583,3961,2620,4036,2682,4085,2719,4160,2762,4209,2800,4284,2738,4358,2657,4426,2576,4532,2490,4600,2440,4656,2391,4618,2316,4519,2229,4432,2198,4321,2149,4259,2062" shape="poly" data-lang-tag="N4-竹塹埔山關">
-      <area target="" alt="N5-穿龍尋山城-從大湖、銅鑼到南庄、三義，連結木雕工藝、草莓產業與山村聚落，形成以工藝美學與農業體驗為核心的文化景觀。此地兼具客家人文、山林地景與青年創生能量，推動地方品牌、節慶觀光與農藝共榮，打造中苗丘陵的文化山城。" title="N5-穿龍尋山城-從大湖、銅鑼到南庄、三義，連結木雕工藝、草莓產業與山村聚落，形成以工藝美學與農業體驗為核心的文化景觀。此地兼具客家人文、山林地景與青年創生能量，推動地方品牌、節慶觀光與農藝共榮，打造中苗丘陵的文化山城。" href="" coords="3825,2490,3756,2576,3682,2669,3645,2756,3564,2862,3502,2955,3434,3041,3378,3128,3323,3215,3267,3295,3372,3314,3447,3351,3515,3382,3595,3426,3670,3469,3713,3494,3769,3413,3831,3345,3918,3252,3973,3159,4060,3047,4122,2955,4184,2855,4215,2806,4128,2744,4029,2688,3930,2607,3887,2545" shape="poly" data-lang-tag="N5-穿龍尋山城">
-      <area target="" alt="N6-金馬樂活島-橫跨馬祖與金門兩大離島，融合閩南聚落、軍事歷史與海島生態。老街古厝、戰地坑道與藍眼淚海灣共構獨特文化景觀。地方創生以文化保存、旅遊再生與海洋教育為核心，形塑離島新風華。" title="N6-金馬樂活島-橫跨馬祖與金門兩大離島，融合閩南聚落、軍事歷史與海島生態。老街古厝、戰地坑道與藍眼淚海灣共構獨特文化景觀。地方創生以文化保存、旅遊再生與海洋教育為核心，形塑離島新風華。" href="" coords="1971,1365,1723,1433,1426,1520,1128,1607,924,1687,812,1842,756,1954,793,2177,843,2369,886,2611,911,2790,961,3001,998,3156,1054,3255,1122,3292,1246,3323,1351,3348,1420,3354,1550,3292,1692,3230,1767,3175,1804,3020,1847,2747,1891,2369,1959,2022,1990,1737,2021,1501,2021,1433" shape="poly" data-lang-tag="N6-金馬樂活島">
-      <area target="" alt="C1-鹿津二湖濱-西部海岸線延展至雲彰平原，潮汐與海風交織成鹽田與漁村的生活節奏。沿岸聚落以漁鹽文化為根，融入濕地生態、宗教信仰與風車景觀，展現自然、產業與人文共榮的濱海風貌，凝聚海線共生的永續能量。" title="C1-鹿津二湖濱-西部海岸線延展至雲彰平原，潮汐與海風交織成鹽田與漁村的生活節奏。沿岸聚落以漁鹽文化為根，融入濕地生態、宗教信仰與風車景觀，展現自然、產業與人文共榮的濱海風貌，凝聚海線共生的永續能量。" href="" coords="3137,3230,3087,3286,3019,3311,2901,3317,2864,3379,2889,3453,2951,3478,2882,3627,2802,3738,2727,3838,2622,4005,2560,4129,2498,4231,2418,4374,2343,4498,2269,4615,2182,4708,2170,4770,2163,4894,2126,4975,2089,5068,2052,5136,2101,5192,2114,5266,2114,5353,2114,5415,2058,5415,2064,5471,2132,5458,2201,5483,2256,5508,2294,5402,2325,5223,2368,5037,2411,4845,2461,4646,2510,4510,2572,4386,2622,4275,2678,4126,2746,4051,2845,3884,2938,3748,3025,3630,3081,3518,3143,3432,3205,3333,3223,3289" shape="poly" data-lang-tag="C1-鹿津二湖濱">
-      <area target="" alt="C2-豐勢環山墩-以台中山城為中心，從后里、新社延伸至霧峰與草屯丘陵，串聯花卉園區、果鄉農村與文化聚落。節慶、農旅與藝術交織出中台生活美學，地方創生以農業品牌、花旅體驗與文化再生為主軸，展現山城韻致與人文光彩。" title="C2-豐勢環山墩-以台中山城為中心，從后里、新社延伸至霧峰與草屯丘陵，串聯花卉園區、果鄉農村與文化聚落。節慶、農旅與藝術交織出中台生活美學，地方創生以農業品牌、花旅體驗與文化再生為主軸，展現山城韻致與人文光彩。" href="" coords="3254,3317,3205,3379,3161,3466,3118,3540,3205,3571,3285,3615,3384,3683,3453,3738,3515,3800,3539,3887,3539,3949,3490,4005,3409,4061,3341,4104,3273,4141,3242,4209,3205,4284,3273,4284,3360,4290,3446,4265,3539,4253,3595,4209,3651,4141,3694,4098,3713,4024,3744,3949,3787,3887,3862,3850,3936,3831,4041,3800,4190,3763,4320,3720,4475,3683,4574,3652,4680,3627,4736,3559,4791,3466,4829,3379,4872,3267,4841,3230,4804,3305,4760,3379,4686,3528,4593,3571,4426,3615,4308,3658,4116,3726,3998,3757,3887,3782,3818,3757,3769,3676,3719,3602,3688,3522,3608,3466,3459,3391,3372,3348" shape="poly" data-lang-tag="C2-豐勢環山墩">
-      <area target="" alt="C3-烏溪綠柳川-從臺中都會向南延伸至彰化平原與鹿港港鎮，串連工藝聚落、文創基地與歷史街區。「半線」象徵傳統工藝、信仰慶典與匠師文化；「城鄉」則代表新創設計、生活美學與青年能量。地方創生以工藝再生、文化導覽與返鄉創業為核心，形塑中彰地區兼具文化厚度與創意活力的城鄉共榮廊帶。" title="C3-烏溪綠柳川-從臺中都會向南延伸至彰化平原與鹿港港鎮，串連工藝聚落、文創基地與歷史街區。「半線」象徵傳統工藝、信仰慶典與匠師文化；「城鄉」則代表新創設計、生活美學與青年能量。地方創生以工藝再生、文化導覽與返鄉創業為核心，形塑中彰地區兼具文化厚度與創意活力的城鄉共榮廊帶。" href="" coords="3099,3559,3050,3621,2982,3726,2932,3819,2864,3918,2808,3999,2758,4092,2746,4117,2802,4160,2864,4191,2944,4228,3013,4253,3087,4271,3161,4290,3192,4203,3236,4123,3298,4073,3391,4042,3465,3993,3496,3943,3509,3887,3502,3831,3440,3763,3329,3683,3205,3608" shape="poly" data-lang-tag="C3-烏溪綠柳川">
-      <area target="" alt="C4-濁水沃田間-從彰化田尾花鄉到雲林虎尾、北港，再至嘉義新港，沿濁水溪平原展開一條融合農業、糖業與信仰的文化軸帶。花卉與稻作構築出豐饒風景，糖業遺產與宗教信仰交織出生活節奏，地方創生聚焦於農村美學、文化旅遊與農工品牌再生。" title="C4-濁水沃田間-從彰化田尾花鄉到雲林虎尾、北港，再至嘉義新港，沿濁水溪平原展開一條融合農業、糖業與信仰的文化軸帶。花卉與稻作構築出豐饒風景，糖業遺產與宗教信仰交織出生活節奏，地方創生聚焦於農村美學、文化旅遊與農工品牌再生。" href="" coords="2727,4153,2671,4246,2628,4346,2591,4445,2535,4556,2504,4668,2467,4804,2430,4953,2393,5077,2374,5201,2355,5306,2324,5418,2300,5517,2386,5480,2504,5424,2572,5412,2659,5381,2758,5368,2851,5356,2932,5337,3025,5331,3056,5213,3087,5083,3130,5009,3186,4891,3236,4810,3198,4717,3174,4606,3167,4507,3167,4420,3161,4327,3062,4290,2950,4253,2820,4203" shape="poly" data-lang-tag="C4-濁水沃田間">
-      <area target="" alt="C5-明潭水沙連-以濁水溪上游為軸，串聯魚池紅茶、集集竹藝與中寮山林聚落。山林自然、人文工藝與茶產業共構地方特色，透過工藝體驗、茶旅品牌與山村生活再生，打造兼具文化深度與生態永續的南投山林創生帶。" title="C5-明潭水沙連-以濁水溪上游為軸，串聯魚池紅茶、集集竹藝與中寮山林聚落。山林自然、人文工藝與茶產業共構地方特色，透過工藝體驗、茶旅品牌與山村生活再生，打造兼具文化深度與生態永續的南投山林創生帶。" href="" coords="3192,4324,3192,4398,3186,4485,3192,4609,3217,4684,3248,4783,3304,4746,3372,4708,3434,4684,3521,4665,3595,4665,3663,4665,3744,4696,3800,4715,3880,4752,3942,4777,3980,4733,4017,4634,4042,4560,4091,4485,4128,4417,4197,4368,4277,4306,4345,4256,4426,4194,4494,4138,4550,4089,4606,4039,4649,3977,4680,3921,4730,3872,4767,3810,4816,3729,4773,3704,4736,3760,4705,3828,4674,3878,4643,3940,4599,3989,4556,4033,4500,4095,4432,4144,4339,4206,4271,4244,4128,4318,4017,4299,3942,4262,3887,4225,3831,4188,3781,4151,3707,4138,3651,4194,3608,4262,3546,4275,3422,4293,3292,4312" shape="poly" data-lang-tag="C5-明潭水沙連">
-      <area target="" alt="C6-溪頭竹林坑-從竹山、鹿谷的竹林，到古坑、梅山的咖啡香氣，這條廊帶以「綠色永續」為主軸，結合森林生態、工藝體驗與咖啡文化，展現山村青年返鄉創業與慢旅生活的典範。地方創生聚焦竹藝創新、咖啡品牌再生與生態教育，打造一條結合自然、產業與文化的永續旅遊帶。" title="C6-溪頭竹林坑-從竹山、鹿谷的竹林，到古坑、梅山的咖啡香氣，這條廊帶以「綠色永續」為主軸，結合森林生態、工藝體驗與咖啡文化，展現山村青年返鄉創業與慢旅生活的典範。地方創生聚焦竹藝創新、咖啡品牌再生與生態教育，打造一條結合自然、產業與文化的永續旅遊帶。" href="" coords="3056,5328,3137,5285,3230,5254,3329,5223,3447,5186,3527,5148,3645,5124,3713,5111,3800,5093,3843,5086,3868,5006,3899,4950,3918,4876,3936,4814,3862,4777,3775,4739,3688,4708,3589,4684,3502,4690,3372,4746,3267,4801,3211,4907,3161,5006,3112,5099,3075,5192" shape="poly" data-lang-tag="C6-溪頭竹林坑">
-      <area target="" alt="S1-西瀛過大員-潟湖、鹽田與潮汐交織出西南沿海的生活圖景，展現以海為業、以鹽為生的鹽鄉文化；遠望澎湖，玄武岩地景與藻場生態描繪島嶼的海洋永續。兩地以信仰為心，媽祖與王船文化串聯港口與聚落，展現跨海連結的生命韌性。串接鹽業技藝、漁村生活與島嶼保育，形塑海陸共榮的永續風華。" title="S1-西瀛過大員-潟湖、鹽田與潮汐交織出西南沿海的生活圖景，展現以海為業、以鹽為生的鹽鄉文化；遠望澎湖，玄武岩地景與藻場生態描繪島嶼的海洋永續。兩地以信仰為心，媽祖與王船文化串聯港口與聚落，展現跨海連結的生命韌性。串接鹽業技藝、漁村生活與島嶼保育，形塑海陸共榮的永續風華。" href="" coords="2045,5306,1897,5381,1729,5461,1549,5567,1401,5610,1302,5474,1227,5313,1153,5164,1103,5034,1035,4904,992,4866,899,4904,799,5003,719,5089,644,5195,576,5282,558,5362,539,5455,533,5542,533,5678,508,5815,490,5920,490,6038,490,6143,477,6211,477,6279,527,6354,576,6379,663,6354,781,6298,954,6242,1060,6217,1196,6230,1271,6273,1395,6317,1500,6354,1624,6422,1686,6453,1797,6503,1872,6515,1915,6577,1977,6602,2039,6639,2089,6682,2120,6571,2132,6422,2157,6267,2182,6131,2213,5970,2225,5833,2238,5715,2262,5629,2275,5548,2151,5499,2039,5492,2015,5424,2039,5368" shape="poly" data-lang-tag="S1-西瀛過大員">
-      <area target="" alt="S2-阿里映北回-山嶺與茶園相依，層巒疊翠間流淌出清潤水脈。河川、圳道灌溉平原農田，構築山水串聯的生活網絡。茶香與稻香交織、聚落與信仰共生，展現嘉義以山為脊、以水為韻的生活風景，映照茶鄉人文與農業永續的和諧節奏。" title="S2-阿里映北回-山嶺與茶園相依，層巒疊翠間流淌出清潤水脈。河川、圳道灌溉平原農田，構築山水串聯的生活網絡。茶香與稻香交織、聚落與信仰共生，展現嘉義以山為脊、以水為韻的生活風景，映照茶鄉人文與農業永續的和諧節奏。" href="" coords="2294,5545,2287,5619,2263,5731,2250,5849,2244,5948,2232,6016,2343,5973,2442,5935,2535,5867,2616,5805,2703,5756,2796,5756,2901,5756,2963,5799,3062,5830,3180,5892,3273,5935,3329,5954,3391,5867,3440,5793,3527,5675,3583,5601,3651,5551,3732,5464,3769,5347,3800,5260,3825,5198,3837,5124,3657,5148,3453,5223,3230,5291,3081,5340,2913,5371,2740,5396,2591,5421,2418,5483" shape="poly" data-lang-tag="S2-阿里映北回">
-      <area target="" alt="S3-屯營首府城-山麓與水圳交織出嘉南的生命紋理，嘉南大圳灌溉良田，串聯新化至柳營的農業聚落。糖業文化與農村生活共構地方記憶，濕地與候鳥描繪四時循環的自然節奏。從山到圳、由田至潮，展現嘉南地區人與自然共生的豐饒風景。" title="S3-屯營首府城-山麓與水圳交織出嘉南的生命紋理，嘉南大圳灌溉良田，串聯新化至柳營的農業聚落。糖業文化與農村生活共構地方記憶，濕地與候鳥描繪四時循環的自然節奏。從山到圳、由田至潮，展現嘉南地區人與自然共生的豐饒風景。" href="" coords="2703,5793,2603,5861,2517,5929,2399,5985,2281,6035,2225,6066,2207,6208,2170,6363,2151,6475,2139,6561,2120,6636,2108,6710,2151,6772,2170,6828,2176,6890,2275,6927,2405,6970,2572,6952,2653,6946,2752,6846,2870,6723,3019,6592,3124,6530,3242,6518,3347,6543,3403,6475,3453,6406,3552,6313,3639,6258,3713,6165,3794,6128,3899,6103,3936,6109,3942,6028,3843,6041,3738,6078,3657,6146,3583,6221,3539,6264,3484,6326,3391,6406,3329,6444,3236,6437,3223,6338,3230,6258,3267,6159,3285,6097,3316,6016,3267,5973,3149,5911,3044,5861,2932,5805,2833,5781" shape="poly" data-lang-tag="S3-屯營首府城">
-      <area target="" alt="S4-仙杉瀰大港-山海環抱的港都地景孕育多元文化與奔放能量。打狗象徵海洋城市的開放精神，承載造船、石化與綠能轉型的產業脈絡；藝陣文化代表山城的信仰節慶與鼓陣傳統。城市節奏與文化鼓聲交織，帶動青年返鄉與社區創新，展現高雄以文化為心、以共榮為潮的振奮韻律。" title="S4-仙杉瀰大港-山海環抱的港都地景孕育多元文化與奔放能量。打狗象徵海洋城市的開放精神，承載造船、石化與綠能轉型的產業脈絡；藝陣文化代表山城的信仰節慶與鼓陣傳統。城市節奏與文化鼓聲交織，帶動青年返鄉與社區創新，展現高雄以文化為心、以共榮為潮的振奮韻律。" href="" coords="2182,6927,2201,6995,2232,7057,2250,7138,2225,7163,2287,7218,2331,7330,2368,7423,2387,7522,2362,7584,2380,7646,2424,7720,2473,7795,2480,7857,2548,7869,2585,7919,2653,7962,2709,8005,2734,7999,2752,7912,2777,7801,2771,7646,2765,7522,2789,7441,2814,7404,2814,7293,2845,7237,2895,7200,2951,7175,3044,7125,3112,7063,3180,7008,3223,6952,3279,6877,3335,6809,3354,6741,3354,6636,3354,6574,3261,6555,3186,6549,3056,6586,2975,6667,2901,6735,2827,6809,2746,6890,2678,6964,2523,6989,2405,6989,2293,6952" shape="poly" data-lang-tag="S4-仙杉瀰大港">
-      <area target="" alt="S5-六堆東津琉-大武山與高屏溪沿途串聯部落、客族農村與工藝聚落，孕育作物與工藝，泥土與水交融，燒製出厚實溫潤的磚瓦陶燒。從稻作農村到海口信仰，南韻展現土地的文化旋律與生活和諧；南島承載原民智慧與海洋記憶，呈現由山至海的永續生活風貌。" title="S5-六堆東津琉-大武山與高屏溪沿途串聯部落、客族農村與工藝聚落，孕育作物與工藝，泥土與水交融，燒製出厚實溫潤的磚瓦陶燒。從稻作農村到海口信仰，南韻展現土地的文化旋律與生活和諧；南島承載原民智慧與海洋記憶，呈現由山至海的永續生活風貌。" href="" coords="3341,6865,3286,6939,3224,7020,3143,7088,3056,7156,2969,7212,2870,7268,2833,7324,2839,7423,2802,7497,2790,7584,2796,7695,2796,7807,2771,7912,2734,8036,2678,8129,2604,8210,2554,8284,2517,8340,2498,8390,2554,8452,2597,8501,2672,8427,2734,8328,2783,8197,2814,8111,2864,8111,2976,8166,3050,8210,3112,8266,3155,8241,3217,8154,3279,8098,3335,8074,3323,7900,3348,7795,3372,7646,3372,7516,3397,7398,3385,7224,3379,7107,3360,6970" shape="poly" data-lang-tag="S5-六堆東津琉">
-      <area target="" alt="S6-三海四季春-南國陽光灑落山海，映照瑯嶠半島多元的生態與人文風景。山麓原鄉承載部落文化與山林智慧，平原聚落延續農耕技藝與生活美學，沿林邊溪展開的客家聚落融合農藝與族群生活，亦展現出多元族群的祭典樂舞與信仰傳承，以族群記憶為脈絡，展現南方以自然為脈、以文化為光的半島風土。" title="S6-三海四季春-南國陽光灑落山海，映照瑯嶠半島多元的生態與人文風景。山麓原鄉承載部落文化與山林智慧，平原聚落延續農耕技藝與生活美學，沿林邊溪展開的客家聚落融合農藝與族群生活，亦展現出多元族群的祭典樂舞與信仰傳承，以族群記憶為脈絡，展現南方以自然為脈、以文化為光的半島風土。" href="" coords="3341,8111,3254,8148,3217,8210,3155,8278,3174,8328,3211,8390,3261,8439,3261,8520,3292,8582,3335,8637,3366,8743,3385,8823,3416,8910,3416,8972,3391,9040,3360,9115,3372,9177,3409,9232,3403,9356,3453,9369,3490,9288,3564,9294,3626,9325,3688,9375,3738,9418,3694,9282,3713,9201,3763,9170,3812,9115,3812,9028,3806,8941,3806,8861,3818,8786,3818,8687,3763,8613,3694,8520,3626,8414,3601,8346,3515,8340,3453,8290,3385,8216" shape="poly" data-lang-tag="S6-三海四季春">
-      <area target="" alt="E1-蘭陽歸園田-雪山山脈環抱的蘭陽內陸，以湧泉灌溉綠野田疇，孕育蔥香與稻香共生的農業風景。泉水流經聚落與埤塘，映照出農村的生活韻律與人情溫度。以溫泉、食農與慢旅為核心，展現山泉流光、田園共生的永續鄉居風貌。" title="E1-蘭陽歸園田-雪山山脈環抱的蘭陽內陸，以湧泉灌溉綠野田疇，孕育蔥香與稻香共生的農業風景。泉水流經聚落與埤塘，映照出農村的生活韻律與人情溫度。以溫泉、食農與慢旅為核心，展現山泉流光、田園共生的永續鄉居風貌。" href="" coords="5839,1982,5790,2062,5709,2167,5628,2273,5461,2409,5350,2496,5226,2607,5157,2663,5102,2731,5046,2837,4990,2924,4940,3016,4885,3122,4847,3209,4891,3233,4940,3140,4990,3047,5027,2979,5052,2893,5114,2800,5238,2657,5343,2651,5467,2676,5560,2713,5647,2762,5734,2812,5802,2812,5883,2818,5858,2576,5858,2428,5864,2310,5870,2217,5895,2068,5907,2000" shape="poly" data-lang-tag="E1-蘭陽歸園田">
-      <area target="" alt="E2-東極觀海澳-雪山山脈延展至蘭陽平原，山河交織孕育豐饒農作與多樣生態。田園聚落與小河文化交錯成風景，展現米食、農村與人情共融的生活樣貌，凝聚自然、文化與產業共榮的創生力量。" title="E2-東極觀海澳-雪山山脈延展至蘭陽平原，山河交織孕育豐饒農作與多樣生態。田園聚落與小河文化交錯成風景，展現米食、農村與人情共融的生活樣貌，凝聚自然、文化與產業共榮的創生力量。" href="" coords="6156,1621,6094,1721,6019,1820,5957,1944,5933,2037,5902,2142,5889,2260,5877,2415,5883,2545,5889,2694,5883,2830,5883,2973,5864,3072,5815,3183,5784,3295,5759,3357,5821,3382,5852,3270,5871,3165,5914,3090,5988,3034,5957,2954,6050,2917,6013,2812,6112,2799,6168,2775,6180,2675,6112,2632,6007,2632,5963,2440,5939,2310,5939,2186,6007,2149,6149,2192,6255,2223,6323,2167,6323,2050,6211,2037,6087,1994,6025,1988,6081,1895,6156,1833,6230,1783,6317,1752,6292,1678,6217,1678" shape="poly" data-lang-tag="E2-東極觀海澳">
-      <area target="" alt="E3-太魯閣洄瀾-中央山脈綿延至太平洋，山海相依構築壯闊的洄瀾風景。雲崖聳立、溪谷縱橫，孕育太魯閣山林的靈氣與花蓮平原的生機。藍灣映照七星潭與港灣生活的光影，展現山海共融、自然人文交織的永續城市意象。" title="E3-太魯閣洄瀾-中央山脈綿延至太平洋，山海相依構築壯闊的洄瀾風景。雲崖聳立、溪谷縱橫，孕育太魯閣山林的靈氣與花蓮平原的生機。藍灣映照七星潭與港灣生活的光影，展現山海共融、自然人文交織的永續城市意象。" href="" coords="5752,3382,5728,3450,5659,3568,5566,3655,5362,3711,5201,3698,5015,3686,4878,3661,4761,3599,4711,3630,4767,3680,4897,3711,5058,3735,5176,3754,5319,3797,5368,3853,5430,3921,5405,4014,5343,4120,5213,4157,5145,4200,5108,4299,5126,4380,5170,4417,5263,4448,5331,4454,5399,4448,5443,4454,5449,4355,5467,4256,5517,4244,5511,4163,5480,3977,5585,3934,5672,3934,5690,3841,5579,3766,5653,3661,5721,3599,5771,3537,5802,3456,5814,3388" shape="poly" data-lang-tag="E3-太魯閣洄瀾">
-      <area target="" alt="E4-群山伴縱谷-海岸山脈與中央山脈環抱的縱谷平原，肥沃土壤孕育出多樣作物與豐富農業景觀。四季分明的田野蘊藏閩、客、原等族群的共生文化，延展出食農教育、農事體驗與永續生活的多元樣貌。以土地為根、以自然為師，展開縱谷綠色創生的風貌。" title="E4-群山伴縱谷-海岸山脈與中央山脈環抱的縱谷平原，肥沃土壤孕育出多樣作物與豐富農業景觀。四季分明的田野蘊藏閩、客、原等族群的共生文化，延展出食農教育、農事體驗與永續生活的多元樣貌。以土地為根、以自然為師，展開縱谷綠色創生的風貌。" href="" coords="5133,4445,5102,4594,5089,4749,5058,4928,5002,5133,4940,5325,4878,5437,4829,5554,4773,5567,4742,5622,4748,5703,4705,5846,4618,6038,4513,6168,4383,6286,4265,6261,4184,6205,4085,6112,3980,6031,3973,6131,4060,6180,4135,6248,4203,6317,4283,6360,4376,6385,4420,6465,4395,6602,4345,6707,4283,6856,4246,6955,4321,7017,4395,7035,4500,6899,4587,6695,4655,6515,4742,6348,4804,6186,4841,6100,4897,6075,4860,6001,4922,5877,4959,5734,5015,5560,5077,5300,5145,5102,5188,5009,5201,4953,5207,4842,5232,4699,5275,4563,5288,4488" shape="poly" data-lang-tag="E4-群山伴縱谷">
-      <area target="" alt="E5-蔚藍東海岸-中央山脈東麓迎向太平洋，晨曦灑落長濱、成功與東河的海岸線，描繪山海共生的東岸風景。沿岸聚落融合自然生態、漁業文化與原民智慧，串連紅藜、咖啡與工藝等在地產業，展現旭日之地蓬勃的創生能量與永續藍色生活力。" title="E5-蔚藍東海岸-中央山脈東麓迎向太平洋，晨曦灑落長濱、成功與東河的海岸線，描繪山海共生的東岸風景。沿岸聚落融合自然生態、漁業文化與原民智慧，串連紅藜、咖啡與工藝等在地產業，展現旭日之地蓬勃的創生能量與永續藍色生活力。" href="" coords="5418,4476,5374,4569,5331,4742,5306,4885,5257,4978,5232,5028,5257,5102,5201,5282,5151,5492,5108,5703,5058,5877,5015,5994,4953,6081,4959,6180,4891,6310,4841,6465,4785,6583,4692,6732,4612,6868,4544,6992,4494,7060,4612,7011,4692,6893,4767,6781,4829,6651,4891,6478,4971,6447,5089,6447,5164,6434,5188,6317,5095,6286,4996,6255,5021,6124,5046,6038,5089,5914,5139,5883,5176,5684,5219,5560,5238,5474,5238,5356,5288,5220,5312,5040,5350,4966,5356,4829,5374,4699,5430,4569" shape="poly" data-lang-tag="E5-蔚藍東海岸">
-      <area target="" alt="E6-大武知東嶼-中央山脈向東延展至太平洋，依山傍海的地景串聯台東沿岸與離島，展現山海共構的壯闊氣勢。沿岸聚落融合藝術創作、原民生活與漁港文化，映照星光與潮聲交織的藍色意象。綠島、蘭嶼以火山島地形、珊瑚海岸與慢漁生活展現純粹的海洋韻律，構築自然、文化與產業共生的療癒島嶼風景。" title="E6-大武知東嶼-中央山脈向東延展至太平洋，依山傍海的地景串聯台東沿岸與離島，展現山海共構的壯闊氣勢。沿岸聚落融合藝術創作、原民生活與漁港文化，映照星光與潮聲交織的藍色意象。綠島、蘭嶼以火山島地形、珊瑚海岸與慢漁生活展現純粹的海洋韻律，構築自然、文化與產業共生的療癒島嶼風景。" href="" coords="4222,7017,4153,7178,4104,7364,4011,7575,3955,7742,3868,7984,3781,8182,3657,8337,3670,8417,3744,8541,3806,8641,3806,8479,3831,8312,3893,8163,3961,7965,4011,7810,4079,7680,4160,7506,4302,7438,4525,7878,4724,8238,4934,8684,5164,9081,5275,9316,5399,9359,5573,9335,5560,9081,5486,8672,5443,8362,5406,8058,5356,7748,5319,7544,5275,7426,5015,7370,4773,7345,4556,7314,4457,7277,4488,7215,4513,7172,4494,7091,4358,7060" shape="poly" data-lang-tag="E6-大武知東嶼">
-    </map>
-    
-    <script>
-      // 圖片原始寬度 (7017px)
-      const ORIGINAL_WIDTH = 7017; 
-      const MOBILE_BREAKPOINT = 950; // 與 CSS 媒體查詢保持一致
-
-      const areaNameElement = document.getElementById("areaName");
-      const imageElement = document.getElementById('Image-Maps');
-      const modalElement = document.getElementById('mobile-modal');
-      const modalTextElement = document.getElementById('modal-text');
-      const modalCloseElement = document.getElementById('modal-close');
+       #content-panel {
+           overflow-y: auto;
+           scrollbar-width: thin;
+           scrollbar-color: #cbd5e1 transparent;
+       }
       
-      // 調整後的說明文字 (需求 2: 手機與桌面提示文字)
-      const desktopHoverText = "請將滑鼠移到地圖區域上，查看詳細廊道描述。";
-      const mobileClickText = "請點擊地圖區域，將以彈跳視窗呈現相關內容。"; 
+       /* 美化捲軸 */
+       #content-panel::-webkit-scrollbar {
+           width: 6px;
+       }
+       #content-panel::-webkit-scrollbar-track {
+           background: transparent;
+       }
+       #content-panel::-webkit-scrollbar-thumb {
+           background-color: #cbd5e1;
+           border-radius: 20px;
+       }
 
-      // 備份原始座標
-      let originalCoordsMap = {};
-      document.querySelectorAll("area").forEach(area => {
-        const tag = area.getAttribute('data-lang-tag');
-        if (tag) {
-             originalCoordsMap[tag] = area.getAttribute('coords');
-        }
-      });
 
-      // 檢查是否為手機寬度 (與 CSS 斷點一致)
-      function isMobileView() {
-          return window.innerWidth < MOBILE_BREAKPOINT;
-      }
+       /* Tooltip（桌機顯示） */
+       #tooltip {
+           position: fixed;
+           background-color: rgba(0,0,0,0.8);
+           color: white;
+           padding: 6px 12px;
+           border-radius: 6px;
+           font-size: 0.9rem;
+           pointer-events: none;
+           transition: opacity 0.1s;
+           z-index: 50;
+           box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+           white-space: nowrap;
+       }
 
-      // 設置提示文字
-      function setInfoText(content) {
-          areaNameElement.textContent = content;
-      }
+
+       @media (max-width: 1023px) {
+           #tooltip {
+               display: none;
+           }
+       }
+
+
+       /* --- 專案計畫區塊樣式 --- */
+       .project-bubble-container {
+           display: flex;
+           flex-direction: column;
+           gap: 12px;
+           margin-top: 1.5rem;
+       }
+
+
+       .project-item {
+           background: #f3f4f6;
+           border-radius: 12px;
+           overflow: hidden;
+           transition: all 0.3s ease;
+           border: 1px solid transparent;
+           opacity: 0;
+           transform: translateY(20px);
+       }
+
+
+       .project-item.animate-in {
+           animation: slideUpFade 0.5s forwards;
+       }
+
+
+       .project-item:hover {
+           background: #fff;
+           border-color: #12687c;
+           box-shadow: 0 4px 12px rgba(18, 104, 124, 0.15);
+       }
+
+
+       .project-header {
+           padding: 12px 16px;
+           display: flex;
+           align-items: center;
+           cursor: pointer;
+           user-select: none;
+       }
+
+
+       /* 專案 Icon 容器 */
+       .project-icon-box {
+           width: 40px;
+           height: 40px;
+           border-radius: 50%;
+           background-color: #fff;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+           margin-right: 14px;
+           transition: all 0.3s ease;
+           box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+           border: 1px solid #f0f0f0;
+           flex-shrink: 0;
+       }
       
-      // 處理懸停邏輯 (桌面版使用)
-      function handleDesktopHover(content) {
-        setInfoText(content || desktopHoverText);
-      }
-      
-      // 處理手機提示
-      function handleMobilePrompt() {
-          setInfoText(mobileClickText);
-      }
-      
-      // 根據當前視圖模式設置正確的提示文字
-      function updatePromptBasedOnView() {
-          if (isMobileView()) {
-              handleMobilePrompt();
-          } else {
-              handleDesktopHover(desktopHoverText);
-          }
-      }
+       .project-item:hover .project-icon-box {
+           transform: scale(1.05);
+           box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+       }
 
-      // 顯示 Modal (手機版使用)
-      function showMobileModal(content) {
-          modalTextElement.textContent = content;
-          modalElement.style.display = 'flex'; // 顯示 Modal
-      }
-      
-      // 核心縮放函式：重新計算所有座標
-      function rescaleCoordinates() {
-        // 1. 取得圖片的實際渲染寬度 
-        const currentWidth = imageElement.clientWidth;
-        const currentScale = currentWidth / ORIGINAL_WIDTH;
 
-        document.querySelectorAll("area").forEach((area) => {
-          const tag = area.getAttribute('data-lang-tag');
-          const originalCoords = originalCoordsMap[tag];
+       .project-title {
+           font-weight: 600;
+           color: #374151;
+           flex-grow: 1;
+           font-size: 1.05rem;
+       }
+
+
+       .toggle-icon {
+           color: #9ca3af;
+           transition: transform 0.3s ease;
+       }
+
+
+       .project-item.expanded {
+           background: #fff;
+           border-color: #12687c;
+           box-shadow: 0 4px 12px rgba(18, 104, 124, 0.1);
+       }
+
+
+       .project-item.expanded .toggle-icon {
+           transform: rotate(180deg);
+           color: #12687c;
+       }
+      
+       .project-detail {
+           max-height: 0;
+           overflow: hidden;
+           transition: max-height 0.5s cubic-bezier(0, 1, 0, 1);
+           background-color: #fafafa;
+       }
+
+
+       .project-detail-inner {
+           padding: 0 20px 20px 70px; /* 左側縮排對齊文字 */
+           color: #6b7280;
+           font-size: 0.95rem;
+           line-height: 1.6;
+       }
+
+
+       .project-item.expanded .project-detail {
+           max-height: 800px;
+           transition: max-height 0.5s ease-in-out;
+       }
+
+
+       /* --- 倡議行動與涵蓋鄉鎮樣式 --- */
+       .township-section, .initiative-section {
+           margin-top: 1.5rem;
+           margin-bottom: 1.5rem;
+       }
+      
+       .county-group, .initiative-box {
+           border: 2px dashed #cbd5e1;
+           border-radius: 12px;
+           padding: 24px 12px 12px 12px;
+           position: relative;
+           margin-bottom: 16px;
+           background-color: #f8fafc;
+       }
+      
+       /* 倡議行動的特殊樣式 */
+       .initiative-box {
+           background-color: #f0fdfa; /* 淺青色底 */
+           border-color: #99f6e4; /* 青色邊框 */
+           padding-top: 18px;
+       }
+
+
+       .county-label {
+           position: absolute;
+           top: -12px;
+           left: 12px;
+           background-color: #fff;
+           padding: 0 8px;
+           font-size: 0.85rem;
+           font-weight: 700;
+           color: #0f766e; /* Teal-700 */
+           border-radius: 4px;
+           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+       }
+
+
+       .initiative-label {
+           position: absolute;
+           top: -14px;
+           left: 12px;
+           background-color: #fff;
+           padding: 2px 10px;
+           font-size: 1.05rem;
+           font-weight: 700;
+           color: #0d9488; /* Teal-600 */
+           border-radius: 6px;
+           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+           border: 1px solid #ccfbf1;
+           white-space: nowrap;
+           max-width: calc(100% - 24px);
+           overflow: hidden;
+           text-overflow: ellipsis;
+       }
+      
+       /* 倡議行動主標題樣式 */
+       .initiative-main-title {
+           font-weight: 800; /* 特粗體 */
+           color: #0f766e;   /* 深綠色 (Teal 700) */
+           font-size: 1.25rem; /* 加大 */
+           margin-bottom: 8px;
+           line-height: 1.4;
+           display: block;
+       }
+
+
+       @media (max-width: 400px) {
+           .initiative-label {
+               white-space: normal;
+               font-size: 0.95rem;
+               line-height: 1.3;
+               position: relative;
+               top: -10px;
+               left: 0;
+               margin-bottom: -5px;
+               display: inline-block;
+           }
+           .initiative-box {
+               padding-top: 10px;
+           }
+       }
+
+
+       .initiative-content {
+           font-size: 1rem;
+           color: #334155;
+           line-height: 1.7;
+           padding: 0 4px 4px 4px;
+           text-align: justify;
+       }
+
+
+       .township-list {
+           display: flex;
+           flex-wrap: wrap;
+           gap: 8px;
+       }
+
+
+       .township-tag {
+           display: inline-block;
+           padding: 4px 12px;
+           border-radius: 9999px;
+           font-size: 0.9rem;
+           color: #4b5563;
+           background-color: #e2e8f0; /* 預設淺灰 */
+           cursor: pointer;
+           transition: all 0.2s;
+           user-select: none;
+           border: 1px solid transparent;
+       }
+
+
+       .township-tag:hover, .township-tag.active {
+           transform: translateY(-1px);
+           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+           border-color: #94a3b8;
+           background-color: #cbd5e1;
+       }
+
+
+       /* 跨區域鄉鎮的特殊樣式 (淡橘色底) */
+       .township-tag.multi-zone {
+           background-color: #ffedd5; /* 橘黃色底 */
+           color: #c2410c; /* 深橘文字 */
+           font-weight: normal;
+       }
+
+
+       .township-tag.multi-zone:hover, .township-tag.multi-zone.active {
+           background-color: #fed7aa;
+       }
+
+
+       /* --- 鄉鎮點擊小視窗 (Popover) --- */
+       #township-popover {
+           position: fixed;
+           background-color: #334155;
+           color: white;
+           padding: 12px 16px;
+           border-radius: 8px;
+           font-size: 0.9rem;
+           z-index: 2000;
+           box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+           max-width: 300px;
+           display: none;
+           opacity: 0;
+           transition: opacity 0.2s;
+           line-height: 1.5;
+       }
+       #township-popover::after {
+           content: '';
+           position: absolute;
+           bottom: -6px;
+           left: 50%;
+           transform: translateX(-50%);
+           border-width: 6px 6px 0;
+           border-style: solid;
+           border-color: #334155 transparent transparent transparent;
+       }
+      
+       .popover-title {
+           color: #fbbf24; /* 黃色強調 */
+           font-weight: bold;
+           font-size: 1rem;
+           margin-bottom: 6px;
+           border-bottom: 1px solid rgba(255,255,255,0.2);
+           padding-bottom: 4px;
+           display: block;
+       }
+      
+       .popover-list {
+           list-style: none;
+           padding: 0;
+           margin: 0;
+       }
+       .popover-list li {
+           position: relative;
+           padding-left: 12px;
+           margin-bottom: 2px;
+       }
+       .popover-list li::before {
+           content: "•";
+           position: absolute;
+           left: 0;
+           color: #94a3b8;
+       }
+      
+       /* --- 標題膠囊樣式 --- */
+       .title-capsule {
+           display: inline-block;
+           background: linear-gradient(135deg, #12687c, #0e7490);
+           color: white;
+           padding: 4px 12px;
+           border-radius: 9999px;
+           font-size: 0.75em;
+           font-weight: 700;
+           letter-spacing: 0.05em;
+           margin-right: 12px;
+           vertical-align: middle;
+           box-shadow: 0 2px 4px rgba(18, 104, 124, 0.2);
+           position: relative;
+           top: -2px;
+       }
+
+
+       .animate-fade-in-up {
+           animation: fadeInUp 0.5s ease-out forwards;
+       }
+       @keyframes fadeInUp {
+           from { opacity: 0; transform: translateY(10px); }
+           to { opacity: 1; transform: translateY(0); }
+       }
+       @keyframes grass-skew {
+           0% { transform: skewX(-12deg); }
+           100% { transform: skewX(12deg); }
+       }
+
+
+       .grass-container {
+           width: 100%;
+           height: 50px;
+           pointer-events: none;
+           overflow: hidden;
+           display: flex;
+           justify-content: flex-end;
+       }
+       .grass-svg {
+           height: 100%;
+           width: auto;
+           max-width: none;
+           transform-origin: bottom right;
+           animation: grass-skew 2s infinite alternate ease-in-out;
+       }
+
+
+       .page-root { position: relative; z-index: 1; }
+
+
+       @media (min-width: 1024px) {
+           #map-wrapper { height: 80vh; max-height: 80vh; overflow: hidden; }
+       }
+      
+       /* SVG 放大圖容器 */
+       .zoom-svg-container {
+           background-color: #f8fafc;
+           border-radius: 0.5rem;
+           padding: 0.5rem;
+           border: 1px solid #e2e8f0;
+           margin-bottom: 1.5rem;
+       }
+      
+       /* Mobile Modal Scroll Fix */
+       #modal-content {
+           background-color: white;
+           width: 90%;
+           max-width: 500px;
+           max-height: 85vh;
+           border-radius: 12px;
+           box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+           display: flex;
+           flex-direction: column;
+           overflow: hidden;
+           animation: slideUp 0.3s ease-out;
+       }
+       #modal-header {
+           background: var(--primary-color, #12687c);
+           color: white;
+           padding: 15px 20px;
+           display: flex;
+           justify-content: space-between;
+           align-items: center;
+           flex-shrink: 0;
+       }
+       #modal-title-text { font-weight: bold; font-size: 1.2rem; }
+       #modal-body {
+           padding: 20px;
+           overflow-y: auto;
+           line-height: 1.6;
+           font-size: 1rem;
+           color: #333;
+           flex-grow: 1;
+           -webkit-overflow-scrolling: touch;
+       }
+       #modal-close { font-size: 28px; cursor: pointer; color: white; line-height: 1; margin-left: 10px; }
+       @keyframes slideUp {
+           from { transform: translateY(20px); opacity: 0; }
+           to { transform: translateY(0); opacity: 1; }
+       }
+
+
+       /* 小標題樣式 */
+       .section-title {
+           font-size: 1.125rem; /* text-lg */
+           font-weight: 700;
+           color: #0f766e; /* text-teal-700 */
+           margin-bottom: 0.75rem;
+           display: flex;
+           align-items: center;
+       }
+       .section-title-bar {
+           display: inline-block;
+           width: 0.5rem;
+           height: 1.5rem;
+           background-color: #0d9488; /* bg-teal-600 */
+           margin-right: 0.5rem;
+           border-radius: 9999px;
+       }
+   </style>
+</head>
+<body class="p-4 min-h-screen">
+
+
+   <div class="max-w-5xl mx-auto page-root">
+       <h1 class="text-2xl font-bold mb-3 leading-snug text-white border-b pb-1 lg:text-3xl lg:mb-6 lg:pb-2 shadow-sm">
+           <span class="block lg:inline">地方創生利他行動168專案</span>
+           <span class="block lg:inline lg:ml-2">廊道地圖</span>
+       </h1>
+       <p class="mb-6 text-white opacity-90">請在地圖上點擊區域：<span class="lg:hidden font-semibold text-yellow-200">行動版將以彈出視窗顯示。</span><span class="hidden lg:inline font-semibold text-yellow-200">寬螢幕將在右側面板顯示。</span></p>
+      
+       <div class="flex flex-col lg:flex-row gap-8 items-start lg:h-[60vh]">
+
+
+           <!-- 左側地圖 -->
+           <!-- 更新：背景色改為 #8ACADB -->
+           <div id="map-wrapper" class="w-full lg:w-[55%] lg:h-[80vh] max-h-[80vh] p-3 bg-[#8ACADB] rounded-2xl shadow-xl relative" style="background-color: #8ACADB;">
+               <svg id="interactive-map" viewBox="0 0 7107 9922" xmlns="http://www.w3.org/2000/svg">
+                   <image href="https://raw.githubusercontent.com/AngChenWu/ChatGPT-Line-Bot/refs/heads/main/Map_A3-4-05.png"
+                          x="0" y="0" width="7107" height="9922"
+                          preserveAspectRatio="xMaxYMax meet"/>
+
+
+                   <!-- 台灣東部/北部區塊 (N1-N5, E1-E6) -->
+                   <polygon id="N1" data-name="N1-七星照大都" transform="translate(65, 0)" points="6025,1708,6137,1608,6131,1441,5870,1385,5821,1354,6025,1714,5889,1708,5703,1553,5560,1590,5486,1658,5455,1782,5641,1900,5808,1986,5548,1906,5387,1856,5219,1856,5095,1863,5027,1813,4965,1683,4909,1571,4909,1478,4897,1398,4971,1323,5021,1249,5046,1168,5126,1094,5188,1057,5263,1013,5356,982,5430,1013,5492,1094,5517,1162,5591,1218,5628,1261,5709,1311,5783,1323" class="map-area" />
+                   <polygon id="N2" data-name="N2-雙港迎風灣" transform="translate(65, 0)" points="4872,1428,4730,1422,4606,1435,4476,1497,4321,1559,4141,1583,4110,1714,4060,1831,3980,1943,3918,2073,3843,2197,3806,2370,3670,2532,3502,2643,3416,2786,3304,2984,3242,3120,3174,3201,3242,3275,3447,2984,3601,2811,3701,2618,3849,2439,3980,2265,4197,2017,4290,1862,4420,1763,4562,1645,4699,1571,4835,1490,4891,1478" class="map-area" />
+                   <polygon id="N3" data-name="N3-嵙崁埤塘園" transform="translate(65, 0)" points="4891,1484,4798,1515,4711,1565,4587,1633,4507,1689,4445,1751,4370,1807,4314,1862,4283,1906,4246,1961,4240,2005,4296,2073,4327,2123,4364,2160,4414,2172,4463,2203,4519,2228,4575,2265,4624,2290,4668,2340,4723,2389,4810,2426,4878,2470,4947,2538,5002,2600,5052,2662,5071,2693,5114,2649,5033,2575,4984,2513,4922,2439,4885,2383,4866,2302,4891,2259,4934,2216,4984,2185,5033,2154,5071,2092,5108,2042,5139,1968,5126,1899,5064,1887,5027,1838,4971,1757,4934,1670,4909,1590,4897,1515" class="map-area" />
+                   <polygon id="N4" data-name="N4-竹塹埔山關" transform="translate(65, 0)" points="4203,2000,4166,2056,4110,2118,4042,2198,3986,2260,3937,2329,3856,2415,3825,2477,3862,2527,3918,2583,3961,2620,4036,2682,4085,2719,4160,2762,4209,2800,4284,2738,4358,2657,4426,2576,4532,2490,4600,2440,4656,2391,4618,2316,4519,2229,4432,2198,4321,2149,4259,2062" class="map-area" />
+                   <polygon id="N5" data-name="N5-穿龍尋山城" transform="translate(65, 0)" points="3825,2490,3756,2576,3682,2669,3645,2756,3564,2862,3502,2955,3434,3041,3378,3128,3323,3215,3267,3295,3372,3314,3447,3351,3515,3382,3595,3426,3670,3469,3713,3494,3769,3413,3831,3345,3918,3252,3973,3159,4060,3047,4122,2955,4184,2855,4215,2806,4128,2744,4029,2688,3930,2607,3887,2545" class="map-area" />
+                   <polygon id="E1" data-name="E1-蘭陽歸園田" transform="translate(65, 0)" points="5839,1982,5790,2062,5709,2167,5628,2273,5461,2409,5350,2496,5226,2607,5157,2663,5102,2731,5046,2837,4990,2924,4940,3016,4885,3122,4847,3209,4891,3233,4940,3140,4990,3047,5027,2979,5052,2893,5114,2800,5238,2657,5343,2651,5467,2676,5560,2713,5647,2762,5734,2812,5802,2812,5883,2818,5858,2576,5858,2428,5864,2310,5870,2217,5895,2068,5907,2000" class="map-area" />
+                   <polygon id="E2" data-name="E2-東極觀海澳" transform="translate(65, 0)" points="6156,1621,6094,1721,6019,1820,5957,1944,5933,2037,5902,2142,5889,2260,5877,2415,5883,2545,5889,2694,5883,2830,5883,2973,5864,3072,5815,3183,5784,3295,5759,3357,5821,3382,5852,3270,5871,3165,5914,3090,5988,3034,5957,2954,6050,2917,6013,2812,6112,2799,6168,2775,6180,2675,6112,2632,6007,2632,5963,2440,5939,2310,5939,2186,6007,2149,6149,2192,6255,2223,6323,2167,6323,2050,6211,2037,6087,1994,6025,1988,6081,1895,6156,1833,6230,1783,6317,1752,6292,1678,6217,1678" class="map-area" />
+                   <polygon id="E3" data-name="E3-太魯閣洄瀾" transform="translate(65, 0)" points="5752,3382,5728,3450,5659,3568,5566,3655,5362,3711,5201,3698,5015,3686,4878,3661,4761,3599,4711,3630,4767,3680,4897,3711,5058,3735,5176,3754,5319,3797,5368,3853,5430,3921,5405,4014,5343,4120,5213,4157,5145,4200,5108,4299,5126,4380,5170,4417,5263,4448,5331,4454,5399,4448,5443,4454,5449,4355,5467,4256,5517,4244,5511,4163,5480,3977,5585,3934,5672,3934,5690,3841,5579,3766,5653,3661,5721,3599,5771,3537,5802,3456,5814,3388" class="map-area" />
+                   <polygon id="E4" data-name="E4-群山伴縱谷" transform="translate(65, 0)" points="5133,4445,5102,4594,5089,4749,5058,4928,5002,5133,4940,5325,4878,5437,4829,5554,4773,5567,4742,5622,4748,5703,4705,5846,4618,6038,4513,6168,4383,6286,4265,6261,4184,6205,4085,6112,3980,6031,3973,6131,4060,6180,4135,6248,4203,6317,4283,6360,4376,6385,4420,6465,4395,6602,4345,6707,4283,6856,4246,6955,4321,7017,4395,7035,4500,6899,4587,6695,4655,6515,4742,6348,4804,6186,4841,6100,4897,6075,4860,6001,4922,5877,4959,5734,5015,5560,5077,5300,5145,5102,5188,5009,5201,4953,5207,4842,5232,4699,5275,4563,5288,4488" class="map-area" />
+                   <polygon id="E5" data-name="E5-蔚藍東海岸" transform="translate(65, 0)" points="5418,4476,5374,4569,5331,4742,5306,4885,5257,4978,5232,5028,5257,5102,5201,5282,5151,5492,5108,5703,5058,5877,5015,5994,4953,6081,4959,6180,4891,6310,4841,6465,4785,6583,4692,6732,4612,6868,4544,6992,4494,7060,4612,7011,4692,6893,4767,6781,4829,6651,4891,6478,4971,6447,5089,6447,5164,6434,5188,6317,5095,6286,4996,6255,5021,6124,5046,6038,5089,5914,5139,5883,5176,5684,5219,5560,5238,5474,5238,5356,5288,5220,5312,5040,5350,4966,5356,4829,5374,4699,5430,4569" class="map-area" />
+                   <polygon id="E6" data-name="E6-大武知東嶼" transform="translate(65, 0)" points="4222,7017,4153,7178,4104,7364,4011,7575,3955,7742,3868,7984,3781,8182,3657,8337,3670,8417,3744,8541,3806,8641,3806,8479,3831,8312,3893,8163,3961,7965,4011,7810,4079,7680,4160,7506,4302,7438,4525,7878,4724,8238,4934,8684,5164,9081,5275,9316,5399,9359,5573,9335,5560,9081,5486,8672,5443,8362,5406,8058,5356,7748,5319,7544,5275,7426,5015,7370,4773,7345,4556,7314,4457,7277,4488,7215,4513,7172,4494,7091,4358,7060" class="map-area" />
+
+
+                   <!-- 台灣西部及離島區塊 (N6, C1-C6, S1-S6) -->
+                   <polygon id="N6" data-name="N6-金馬樂活島" transform="translate(65, 0)" points="1971,1365,1723,1433,1426,1520,1128,1607,924,1687,812,1842,756,1954,793,2177,843,2369,886,2611,911,2790,961,3001,998,3156,1054,3255,1122,3292,1246,3323,1351,3348,1420,3354,1550,3292,1692,3230,1767,3175,1804,3020,1847,2747,1891,2369,1959,2022,1990,1737,2021,1501,2021,1433" class="map-area" />
+                   <polygon id="C1" data-name="C1-鹿津二湖濱" transform="translate(65, 0)" points="3137,3230,3087,3286,3019,3311,2901,3317,2864,3379,2889,3453,2951,3478,2882,3627,2802,3738,2727,3838,2622,4005,2560,4129,2498,4231,2418,4374,2343,4498,2269,4615,2182,4708,2170,4770,2163,4894,2126,4975,2089,5068,2052,5136,2101,5192,2114,5266,2114,5353,2114,5415,2058,5415,2064,5471,2132,5458,2201,5483,2256,5508,2294,5402,2325,5223,2368,5037,2411,4845,2461,4646,2510,4510,2572,4386,2622,4275,2678,4126,2746,4051,2845,3884,2938,3748,3025,3630,3081,3518,3143,3432,3205,3333,3223,3289" class="map-area" />
+                   <polygon id="C2" data-name="C2-豐勢環山墩" transform="translate(65, 0)" points="3254,3317,3205,3379,3161,3466,3118,3540,3205,3571,3285,3615,3384,3683,3453,3738,3515,3800,3539,3887,3539,3949,3490,4005,3409,4061,3341,4104,3273,4141,3242,4209,3205,4284,3273,4284,3360,4290,3446,4265,3539,4253,3595,4209,3651,4141,3694,4098,3713,4024,3744,3949,3787,3887,3862,3850,3936,3831,4041,3800,4190,3763,4320,3720,4475,3683,4574,3652,4680,3627,4736,3559,4791,3466,4829,3379,4872,3267,4841,3230,4804,3305,4760,3379,4686,3528,4593,3571,4426,3615,4308,3658,4116,3726,3998,3757,3887,3782,3818,3757,3769,3676,3719,3602,3688,3522,3608,3466,3459,3391,3372,3348" class="map-area" />
+                   <polygon id="C3" data-name="C3-烏溪綠柳川" transform="translate(65, 0)" points="3099,3559,3050,3621,2982,3726,2932,3819,2864,3918,2808,3999,2758,4092,2746,4117,2802,4160,2864,4191,2944,4228,3013,4253,3087,4271,3161,4290,3192,4203,3236,4123,3298,4073,3391,4042,3465,3993,3496,3943,3509,3887,3502,3831,3440,3763,3329,3683,3205,3608" class="map-area" />
+                   <polygon id="C4" data-name="C4-濁水沃田間" transform="translate(65, 0)" points="2727,4153,2671,4246,2628,4346,2591,4445,2535,4556,2504,4668,2467,4804,2430,4953,2393,5077,2374,5201,2355,5306,2324,5418,2300,5517,2386,5480,2504,5424,2572,5412,2659,5381,2758,5368,2851,5356,2932,5337,3025,5331,3056,5213,3087,5083,3130,5009,3186,4891,3236,4810,3198,4717,3174,4606,3167,4507,3167,4420,3161,4327,3062,4290,2950,4253,2820,4203" class="map-area" />
+                   <polygon id="C5" data-name="C5-明潭水沙連" transform="translate(65, 0)" points="3192,4324,3192,4398,3186,4485,3192,4609,3217,4684,3248,4783,3304,4746,3372,4708,3434,4684,3521,4665,3595,4665,3663,4665,3744,4696,3800,4715,3880,4752,3942,4777,3980,4733,4017,4634,4042,4560,4091,4485,4128,4417,4197,4368,4277,4306,4345,4256,4426,4194,4494,4138,4550,4089,4606,4039,4649,3977,4680,3921,4730,3872,4767,3810,4816,3729,4773,3704,4736,3760,4705,3828,4674,3878,4643,3940,4599,3989,4556,4033,4500,4095,4432,4144,4339,4206,4271,4244,4128,4318,4017,4299,3942,4262,3887,4225,3831,4188,3781,4151,3707,4138,3651,4194,3608,4262,3546,4275,3422,4293,3292,4312" class="map-area" />
+                   <polygon id="C6" data-name="C6-溪頭竹林坑" transform="translate(65, 0)" points="3056,5328,3137,5285,3230,5254,3329,5223,3447,5186,3527,5148,3645,5124,3713,5111,3800,5093,3843,5086,3868,5006,3899,4950,3918,4876,3936,4814,3862,4777,3775,4739,3688,4708,3589,4684,3502,4690,3372,4746,3267,4801,3211,4907,3161,5006,3112,5099,3075,5192" class="map-area" />
+                   <polygon id="S1" data-name="S1-西瀛過大員" transform="translate(65, 0)" points="2045,5306,1897,5381,1729,5461,1549,5567,1401,5610,1302,5474,1227,5313,1153,5164,1103,5034,1035,4904,992,4866,899,4904,799,5003,719,5089,644,5195,576,5282,558,5362,539,5455,533,5542,533,5678,508,5815,490,5920,490,6038,490,6143,477,6211,477,6279,527,6354,576,6379,663,6354,781,6298,954,6242,1060,6217,1196,6230,1271,6273,1395,6317,1500,6354,1624,6422,1686,6453,1797,6503,1872,6515,1915,6577,1977,6602,2039,6639,2089,6682,2120,6571,2132,6422,2157,6267,2182,6131,2213,5970,2225,5833,2238,5715,2262,5629,2275,5548,2151,5499,2039,5492,2015,5424,2039,5368" class="map-area" />
+                   <polygon id="S2" data-name="S2-阿里映北回" transform="translate(65, 0)" points="2294,5545,2287,5619,2263,5731,2250,5849,2244,5948,2232,6016,2343,5973,2442,5935,2535,5867,2616,5805,2703,5756,2796,5756,2901,5756,2963,5799,3062,5830,3180,5892,3273,5935,3329,5954,3391,5867,3440,5793,3527,5675,3583,5601,3651,5551,3732,5464,3769,5347,3800,5260,3825,5198,3837,5124,3657,5148,3453,5223,3230,5291,3081,5340,2913,5371,2740,5396,2591,5421,2418,5483" class="map-area" />
+                   <polygon id="S3" data-name="S3-屯營首府城" transform="translate(65, 0)" points="2703,5793,2603,5861,2517,5929,2399,5985,2281,6035,2225,6066,2207,6208,2170,6363,2151,6475,2139,6561,2120,6636,2108,6710,2151,6772,2170,6828,2176,6890,2275,6927,2405,6970,2572,6952,2653,6946,2752,6846,2870,6723,3019,6592,3124,6530,3242,6518,3347,6543,3403,6475,3453,6406,3552,6313,3639,6258,3713,6165,3794,6128,3899,6103,3936,6109,3942,6028,3843,6041,3738,6078,3657,6146,3583,6221,3539,6264,3484,6326,3391,6406,3329,6444,3236,6437,3223,6338,3230,6258,3267,6159,3285,6097,3316,6016,3267,5973,3149,5911,3044,5861,2932,5805,2833,5781" class="map-area" />
+                   <polygon id="S4" data-name="S4-仙杉瀰大港" transform="translate(65, 0)" points="2182,6927,2201,6995,2232,7057,2250,7138,2225,7163,2287,7218,2331,7330,2368,7423,2387,7522,2362,7584,2380,7646,2424,7720,2473,7795,2480,7857,2548,7869,2585,7919,2653,7962,2709,8005,2734,7999,2752,7912,2777,7801,2771,7646,2765,7522,2789,7441,2814,7404,2814,7293,2845,7237,2895,7200,2951,7175,3044,7125,3112,7063,3180,7008,3223,6952,3279,6877,3335,6809,3354,6741,3354,6636,3354,6574,3261,6555,3186,6549,3056,6586,2975,6667,2901,6735,2827,6809,2746,6890,2678,6964,2523,6989,2405,6989,2293,6952" class="map-area" />
+                   <polygon id="S5" data-name="S5-六堆東津琉" transform="translate(65, 0)" points="3341,6865,3286,6939,3224,7020,3143,7088,3056,7156,2969,7212,2870,7268,2833,7324,2839,7423,2802,7497,2790,7584,2796,7695,2796,7807,2771,7912,2734,8036,2678,8129,2604,8210,2554,8284,2517,8340,2498,8390,2554,8452,2597,8501,2672,8427,2734,8328,2783,8197,2814,8111,2864,8111,2976,8166,3050,8210,3112,8266,3155,8241,3217,8154,3279,8098,3335,8074,3323,7900,3348,7795,3372,7646,3372,7516,3397,7398,3385,7224,3379,7107,3360,6970" class="map-area" />
+                   <polygon id="S6" data-name="S6-三海四季春" transform="translate(65, 0)" points="3341,8111,3254,8148,3217,8210,3155,8278,3174,8328,3211,8390,3261,8439,3261,8520,3292,8582,3335,8637,3366,8743,3385,8823,3416,8910,3416,8972,3391,9040,3360,9115,3372,9177,3409,9232,3403,9356,3453,9369,3490,9288,3564,9294,3626,9325,3688,9375,3738,9418,3694,9282,3713,9201,3763,9170,3812,9115,3812,9028,3806,8941,3806,8861,3818,8786,3818,8687,3763,8613,3694,8520,3626,8414,3601,8346,3515,8340,3453,8290,3385,8216" class="map-area" />
+               </svg>
+           </div>
+
+
+           <!-- 右側內容面板 -->
+           <div id="content-panel" class="hidden lg:block w-full lg:w-[45%] p-6 bg-white rounded-xl shadow-lg border border-gray-100 h-[70vh] max-h-[70vh] overflow-y-auto">
+               <div id="panel-content" class="text-gray-600">
+                   <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">區域詳細數據</h3>
+                   <p>請點擊左側地圖上的區域以查看詳細資訊。</p>
+               </div>
+           </div>
+
+
+       </div>
+   </div>
+  
+   <!-- 懸停 Tooltip -->
+   <div id="tooltip" class="hidden"></div>
+
+
+   <!-- Dialog/Modal 結構 (行動版) -->
+   <div id="dialog-modal" class="dialog-modal">
+       <div id="modal-content">
+           <div id="modal-header">
+               <h3 id="modal-title-text"></h3>
+               <div id="modal-close" onclick="closeDialog()">×</div>
+           </div>
+           <div id="modal-body">
+               <div id="dialog-table-content"></div>
+           </div>
+       </div>
+   </div>
+
+
+   <script>
+       // 1. 區域文字內容與創生計畫資料庫 (Updated)
+       const areaData = { 'N1': { title: 'N1-七星照大都', initiative: '<span class="initiative-main-title">山港共鳴 × 生活創生</span>透過團隊在地方擾動，串接北都山海港城的文化、音樂、創意、礦業、茶香等產業。', content: `從台北城到北海岸，串聯山城聚落、茶鄉文化與港灣歷史。茶香、礦脈與潮聲交織出北台灣的文化節奏，城市與自然相互呼應，形成山港交融的生活長廊。地方創生以文化保存、茶旅體驗與老街再生為主軸，展現北區多元人文風貌。`, townships: { '基隆市': ['中正區', '七堵區', '暖暖區', '仁愛區', '中山區', '安樂區', '信義區'], '新北市': ['板橋區', '三重區', '中和區', '永和區', '新莊區', '新店區', '樹林區', '三峽區', '淡水區', '汐止區', '瑞芳區', '土城區', '蘆洲區', '五股區', '泰山區', '林口區', '深坑區', '石碇區', '坪林區', '三芝區', '石門區', '八里區', '平溪區', '雙溪區', '貢寮區', '金山區', '萬里區', '烏來區'], '臺北市': ['松山區', '信義區', '大安區', '中山區', '中正區', '大同區', '萬華區', '文山區', '南港區', '內湖區', '士林區', '北投區'], '桃園市': ['龜山區'] } }, 'N2': { title: 'N2-雙港迎風灣', initiative: '<span class="initiative-main-title">潮風共作 × 生態共學</span>以濱海風光為底蘊，串連風能、漁業與生態教育，融合綠能科技與漁村文化，促進社區、產業與自然環境的共學共榮，推動永續旅遊與環境學習。', content: `從林口到大安，北台灣西岸展現風力、漁業與生態共構的濱海風光。風車林立、潮汐潟湖與漁港人文交織出「藍綠共生」的生活圖景。地方創生以濱海生態旅遊、綠能教育與漁村再生為主軸，打造永續新海岸。`, townships: { '桃園市': ['中壢區', '楊梅區', '蘆竹區', '大園區', '新屋區', '觀音區'], '新竹縣': ['竹北市', '新埔鎮', '湖口鄉', '新豐鄉'], '新竹市': ['東區', '北區', '香山區'], '苗栗縣': ['苗栗市', '苑裡鎮', '通霄鎮', '竹南鎮', '頭份市', '後龍鎮', '西湖鄉', '造橋鄉'], '新北市': ['林口區'], '臺中市': ['大甲區', '大安區'] } }, 'N3': { title: 'N3-嵙崁埤塘園', initiative: '<span class="initiative-main-title">山麓共作 × 手作共響</span>以地景共創與文化傳承之內容，帶出山麓聚落地方感，亦結合手作工藝之創造，促進地方聚落、生活與工藝產業之應用。', content: `沿大漢溪串連三峽、大溪至中壢山麓平原，形成茶鄉、溪谷與工藝文化交織的生活軸帶。這裡融合自然景觀與人文技藝，從茶園山徑到老街工坊，展現北桃地區以文化手作、地方產業與青年返鄉為核心的創生能量。`, townships: { '宜蘭縣': ['大同鄉'], '桃園市': ['桃園區', '中壢區', '大溪區', '楊梅區', '蘆竹區', '大園區', '龜山區', '八德區', '龍潭區', '平鎮區', '新屋區', '觀音區', '復興區'], '新竹縣': ['新埔鎮', '關西鎮', '湖口鄉', '尖石鄉'], '新北市': ['新店區', '樹林區', '鶯歌區', '三峽區', '土城區', '林口區'] } }, 'N4': { title: 'N4-竹塹埔山關', initiative: '<span class="initiative-main-title">客庄共融 × 智慧技藝</span>以客庄文化為底蘊，融合科技應用與匠藝精神，推動傳統產業升級與文化再造，促進青年返鄉共創、產業合作與社群共融。', content: `橫跨新竹丘陵至科學園區，山林聚落與創新能量共構竹地新風貌。客庄文化蘊含匠藝溫度，青年返鄉以科技、設計與永續創新賦予產業新生命，展現竹鄉的文化轉型力。`, townships: { '新竹縣': ['竹北市', '竹東鎮', '新埔鎮', '關西鎮', '湖口鄉', '芎林鄉', '橫山鄉', '北埔鄉', '寶山鄉', '峨眉鄉', '尖石鄉', '五峰鄉'], '苗栗縣': ['竹南鎮', '頭份市', '南庄鄉', '三灣鄉'], '新竹市': ['東區', '北區', '香山區'] } }, 'N5': { title: 'N5-穿龍尋山城', initiative: '<span class="initiative-main-title">工藝山城 × 農藝共榮</span>以木雕文化體驗、特色莓果農遊與山林生活美學，重現中苗丘陵獨特的客家山城魅力與慢活氛圍。', content: `從大湖、銅鑼到南庄、三義，連結木雕工藝、草莓產業與山村聚落，形成以工藝美學與農業體驗為核心的文化景觀。此地兼具客家人文、山林地景與青年創生能量，推動地方品牌、節慶觀光與農藝共榮，打造中苗丘陵的文化山城。`, townships: { '新竹縣': ['五峰鄉'], '苗栗縣': ['苗栗市', '苑裡鎮', '通霄鎮', '竹南鎮', '頭份市', '後龍鎮', '卓蘭鎮', '大湖鄉', '公館鄉', '銅鑼鄉', '南庄鄉', '頭屋鄉', '三義鄉', '西湖鄉', '造橋鄉', '三灣鄉', '獅潭鄉', '泰安鄉'], '臺中市': ['東勢區', '大甲區', '后里區', '石岡區', '外埔區'] } }, 'N6': { title: 'N6-金馬樂活島', initiative: '<span class="initiative-main-title">戰地築堡 × 島嶼共生</span>以離島戰地歷史為基礎，重新詮釋軍事遺構、聚落文化與海洋生態的共存樣貌，讓昔日防禦堡壘轉化為島嶼故事的載體，結合旅遊再生與海洋教育行動，推動離島生活、歷史與自然的共生新風貌。', content: `橫跨馬祖與金門兩大離島，融合閩南聚落、軍事歷史與海島生態。老街古厝、戰地坑道與藍眼淚海灣共構獨特文化景觀。地方創生以文化保存、旅遊再生與海洋教育為核心，形塑離島新風華。`, townships: { '連江縣': ['南竿鄉', '北竿鄉', '莒光鄉', '東引鄉'], '金門縣': ['金城鎮', '金沙鎮', '金湖鎮', '金寧鄉', '烈嶼鄉', '烏坵鄉'] } }, 'C1': { title: 'C1-鹿津二湖濱', initiative: '<span class="initiative-main-title">潮風共振 × 永續海埕</span>汲取西部海岸的潮汐與海風能量，活化地方獨特的漁鹽風土文化，並與濕地生態、在地信仰及綠能地景共譜新篇章。', content: `西部海岸線延展至雲彰平原，潮汐與海風交織成鹽田與漁村的生活節奏。沿岸聚落以漁鹽文化為根，融入濕地生態、宗教信仰與風車景觀，展現自然、產業與人文共榮的濱海風貌，凝聚海線共生的永續能量。`, townships: { '彰化縣': ['鹿港鎮', '線西鄉', '伸港鄉', '福興鄉', '芳苑鄉', '大城鄉'], '雲林縣': ['崙背鄉', '麥寮鄉', '東勢鄉', '褒忠鄉', '臺西鄉', '四湖鄉', '口湖鄉', '水林鄉'], '嘉義縣': ['六腳鄉', '東石鄉'], '臺中市': ['大甲區', '清水區', '沙鹿區', '大安區', '龍井區', '梧棲區'] } }, 'C2': { title: 'C2-豐勢環山墩', initiative: '<span class="initiative-main-title">風土學遊 × 品牌共創</span>透過「休閒農業推廣行銷 × 在地農友」共同打造學旅品牌，以產地餐桌、農務體驗與數位行銷，重塑山城的農業教育與觀光價值。', content: `以台中山城為中心，從后里、新社延伸至霧峰與草屯丘陵，串聯花卉園區、果鄉農村與文化聚落。節慶、農旅與藝術交織出中台生活美學，地方創生以農業品牌、花旅體驗與文化再生為主軸，展現山城韻致與人文光彩。`, townships: { '宜蘭縣': ['大同鄉'], '彰化縣': ['芬園鄉', '員林市'], '南投縣': ['草屯鎮', '國姓鄉', '仁愛鄉'], '臺中市': ['北屯區', '豐原區', '東勢區', '大甲區', '清水區', '沙鹿區', '后里區', '神岡區', '潭子區', '大雅區', '新社區', '石岡區', '外埔區', '烏日區', '霧峰區', '太平區', '大里區', '和平區'] } }, 'C3': { title: 'C3-烏溪綠柳川', initiative: '<span class="initiative-main-title">匠藝城鄉 × 文化再生</span>以工藝為核心的跨域品牌行動──透過工藝故事、文化路徑與創意轉譯，打造中彰特色的文化觀光與生活設計品牌。', content: `從臺中都會向南延伸至彰化平原與鹿港港鎮，串聯工藝聚落、文創基地與歷史街區。「半線」象徵傳統工藝、信仰慶典與匠師文化；「城鄉」則代表新創設計、生活美學與青年能量。地方創生以工藝再生、文化導覽與返鄉創業為核心，形塑中彰地區兼具文化厚度與創意活力的城鄉共榮廊帶。`, townships: { '彰化縣': ['彰化市', '鹿港鎮', '和美鎮', '線西鄉', '伸港鄉', '福興鄉', '秀水鄉', '花壇鄉', '芬園鄉', '員林市', '大村鄉', '埔鹽鄉'], '臺中市': ['中區', '東區', '南區', '西區', '北區', '西屯區', '南屯區', '北屯區', '清水區', '沙鹿區', '潭子區', '大雅區', '烏日區', '大肚區', '龍井區', '霧峰區', '太平區', '大里區', '梧棲區'] } }, 'C4': { title: 'C4-濁水沃田間', initiative: '<span class="initiative-main-title">農村旅行 X 飲食文化</span>「風味廊帶・信仰香路」—以味覺旅行連結土地記憶，串起農村文化與生活美學。<br><br>以食為媒，串聯地方農業、產地故事與宗教民俗文化，打造能體驗地方食材、農村生活與節氣飲食的「風味農旅路線」。透過發掘代表性農產品與傳統美食，記錄地方味道與信仰文化記憶，結合食農教育與體驗活動，推動以飲食帶動文化、以旅遊促進產業的觀光軸線。', content: `從彰化田尾花鄉到雲林虎尾、北港，再至嘉義新港，沿濁水溪平原展開一條融合農業、糖業與信仰的文化軸帶。花卉與稻作構築出豐饒風景，糖業遺產與宗教信仰交織出生活節奏，地方創生聚焦於農村美學、文化旅遊與農工品牌再生。`, townships: { '彰化縣': ['福興鄉', '秀水鄉', '員林市', '溪湖鎮', '田中鎮', '大村鄉', '埔鹽鄉', '埔心鄉', '永靖鄉', '社頭鄉', '二水鄉', '北斗鎮', '二林鎮', '田尾鄉', '埤頭鄉', '芳苑鄉', '大城鄉', '竹塘鄉', '溪州鄉'], '雲林縣': ['斗六市', '斗南鎮', '虎尾鎮', '西螺鎮', '土庫鎮', '北港鎮', '古坑鄉', '大埤鄉', '莿桐鄉', '林內鄉', '二崙鄉', '崙背鄉', '麥寮鄉', '東勢鄉', '褒忠鄉', '元長鄉', '四湖鄉', '水林鄉'], '嘉義縣': ['大林鎮', '民雄鄉', '溪口鄉', '新港鄉', '六腳鄉', '東石鄉', '竹崎鄉', '梅山鄉'] } }, 'C5': { title: 'C5-明潭水沙連', initiative: '<span class="initiative-main-title">魚池紅茶 × 集集竹藝 × 中寮山村</span>推動南投山林創生帶的「茶竹共生」行動。透過工藝設計、茶旅體驗與聚落再生，串聯山林自然與人文產業，展現山林生活的文化厚度與永續價值。', content: `以濁水溪上游為軸，串聯魚池紅茶、集集竹藝與中寮山林聚落。山林自然、人文工藝與茶產業共構地方特色，透過工藝體驗、茶旅品牌與山村生活再生，打造兼具文化深度與生態永續的南投山林創生帶。`, townships: { '彰化縣': ['芬園鄉', '員林市', '田中鎮', '社頭鄉', '二水鄉'], '南投縣': ['南投市', '埔里鎮', '草屯鎮', '竹山鎮', '集集鎮', '名間鄉', '鹿谷鄉', '中寮鄉', '魚池鄉', '國姓鄉', '水里鄉', '信義鄉', '仁愛鄉'], '雲林縣': ['林內鄉'], '花蓮縣': ['秀林鄉'] } }, 'C6': { title: 'C6-溪頭竹林坑', initiative: '<span class="initiative-main-title">竹藝再生 × 咖啡共榮</span>以「綠色永續」為核心，串聯竹山、鹿谷的竹林與古坑、梅山的咖啡聚落，推動竹藝創新與咖啡品牌再生。透過森林生態旅遊、工藝體驗與青年創業，展現山村慢旅與永續生活的新典範。', content: `從竹山、鹿谷的竹林，到古坑、梅山的咖啡香氣，這條廊帶以「綠色永續」為主軸，結合森林生態、工藝體驗與咖啡文化，展現山村青年返鄉創業與慢旅生活的典範。地方創生聚焦竹藝創新、咖啡品牌再生與生態教育，打造一條結合自然、產業與文化的永續旅遊帶。`, townships: { '南投縣': ['竹山鎮', '集集鎮', '鹿谷鄉', '水里鄉', '信義鄉'], '雲林縣': ['斗六市', '古坑鄉', '林內鄉'], '嘉義縣': ['梅山鄉', '阿里山鄉'] } }, 'S1': { title: 'S1-西瀛過大員', initiative: '<span class="initiative-main-title">鹽鄉共創 × 永續再生</span>以「鹽業文化 × 生態旅遊 × 信仰人文」為核心，串聯西南海岸及澎湖之沿海聚落，推動鹽業文化再生與漁村創生，打造兼具文化底蘊與環境永續的濱海生活。', content: `潟湖、鹽田與潮汐交織出西南沿海的生活圖景，展現以海為業、以鹽為生的鹽鄉文化；遠望澎湖，玄武岩地景與藻場生態描繪島嶼的海洋永續。兩地以信仰為心，媽祖與王船文化串聯港口與聚落，展現跨海連結的生命韌性。串接鹽業技藝、漁村生活與島嶼保育，形塑海陸共榮的永續風華。`, townships: { '嘉義縣': ['朴子市', '布袋鎮', '東石鄉', '義竹鄉'], '澎湖縣': ['馬公市', '湖西鄉', '白沙鄉', '西嶼鄉', '望安鄉', '七美鄉'], '臺南市': ['鹽水區', '佳里區', '學甲區', '七股區', '將軍區', '北門區', '安南區', '安平區'] } }, 'S2': { title: 'S2-阿里映北回', initiative: '<span class="initiative-main-title">茶稻共榮 × 農藝新生</span>以「茶業文化 × 稻作創新 」為核心，透過茶藝美學與飲食文化創新，提升農業產業價值，帶動地方品牌再生，形塑兼具人文深度與產業創新的茶稻共榮生活圈。', content: `山嶺與茶園相依，層巒疊翠間流淌出清潤水脈。河川、圳道灌溉平原農田，構築山水串聯的生活網絡。茶香與稻香交織、聚落與信仰共生，展現嘉義以山為脊、以水為韻的生活風景，映照茶鄉人文與農業永續的和諧節奏。`, townships: { '南投縣': ['竹山鎮', '信義鄉'], '雲林縣': ['古坑鄉'], '嘉義縣': ['太保市', '朴子市', '布袋鎮', '民雄鄉', '新港鄉', '六腳鄉', '東石鄉', '義竹鄉', '鹿草鄉', '水上鄉', '中埔鄉', '竹崎鄉', '梅山鄉', '番路鄉', '大埔鄉', '阿里山鄉'], '嘉義市': ['東區', '西區'], '臺南市': ['新營區', '鹽水區', '白河區', '後壁區', '學甲區'] } }, 'S3': { title: 'S3-屯營首府城', initiative: '<span class="initiative-main-title">蔗香良田 × 田園記憶</span>以糖業文化與農村生活為意象，結合在地飲食文化與農產創新，提升農業產業價值與品牌形象，透過青年返鄉與城鄉交流，活化地方記憶與社區生活。', content: `山麓與水圳交織出嘉南的生命紋理，嘉南大圳灌溉良田，串聯新化至柳營的農業聚落。糖業文化與農村生活共構地方記憶，濕地與候鳥描繪四時循環的自然節奏。從山到圳、由田至潮，展現嘉南地區人與自然共生的豐饒風景。`, townships: { '嘉義縣': ['中埔鄉', '大埔鄉', '阿里山鄉'], '臺東縣': ['海端鄉'], '高雄市': ['田寮區', '阿蓮區', '路竹區', '湖內區', '茄萣區', '六龜區', '甲仙區', '杉林區', '內門區', '桃源區', '那瑪夏區'], '臺南市': ['新營區', '鹽水區', '白河區', '柳營區', '後壁區', '東山區', '麻豆區', '下營區', '六甲區', '官田區', '大內區', '佳里區', '學甲區', '西港區', '七股區', '新化區', '善化區', '新市區', '安定區', '山上區', '玉井區', '楠西區', '南化區', '左鎮區', '仁德區', '歸仁區', '關廟區', '龍崎區', '永康區', '東區', '南區', '北區', '安南區', '安平區', '中西區'] } }, 'S4': { title: 'S4-仙杉瀰大港', initiative: '<span class="initiative-main-title">港城風華 × 創新山城</span>以港灣產業轉型與傳統文化為核心，結合地方節慶、青年返鄉創業與社區活化，展現舊城區及高雄港區的歷史魅力與文化能量。', content: `山海環抱的港都地景孕育多元文化與奔放能量。打狗象徵海洋城市的開放精神，承載造船、石化與綠能轉型的產業脈絡；藝陣文化代表山城的信仰節慶與鼓陣傳統。城市節奏與文化鼓聲交織，帶動青年返鄉與社區創新，展現高雄以文化為心、以共榮為潮的振奮韻律。`, townships: { '屏東縣': ['屏東市', '萬丹鄉', '九如鄉', '里港鄉', '高樹鄉', '新園鄉'], '高雄市': ['鹽埕區', '鼓山區', '左營區', '楠梓區', '三民區', '新興區', '前金區', '苓雅區', '前鎮區', '旗津區', '小港區', '鳳山區', '林園區', '大寮區', '大樹區', '大社區', '仁武區', '鳥松區', '岡山區', '橋頭區', '燕巢區', '田寮區', '阿蓮區', '路竹區', '湖內區', '茄萣區', '永安區', '彌陀區', '梓官區', '旗山區', '美濃區', '六龜區', '甲仙區', '杉林區', '內門區', '茂林區', '桃源區'], '臺南市': ['關廟區', '龍崎區', '南區'] } }, 'S5': { title: 'S5-六堆東津琉', initiative: '<span class="initiative-main-title">工藝聚落 × 青銀共融</span>透過青年返鄉行動與社區共學機制，延續瑯嶠半島的文化脈絡，導入長照共生與青銀互助，培育在地人才與文化行動力，讓部落與農村的生活更具韌性與活力。', content: `大武山與高屏溪沿途串聯部落、客族農村與工藝聚落，孕育作物與工藝，泥土與水交融，燒製出厚實溫潤的磚瓦陶燒。從稻作農村到海口信仰，南韻展現土地的文化旋律與生活和諧；南島承載原民智慧與海洋記憶，呈現由山至海的永續生活風貌。`, townships: { '屏東縣': ['屏東市', '潮州鎮', '東港鎮', '萬丹鄉', '長治鄉', '麟洛鄉', '九如鄉', '里港鄉', '鹽埔鄉', '高樹鄉', '萬巒鄉', '內埔鄉', '竹田鄉', '新埤鄉', '枋寮鄉', '新園鄉', '崁頂鄉', '林邊鄉', '南州鄉', '佳冬鄉', '琉球鄉', '三地門鄉', '霧臺鄉', '瑪家鄉', '泰武鄉', '來義鄉', '春日鄉'], '高雄市': ['大寮區', '六龜區', '茂林區'] } }, 'S6': { title: 'S6-三海四季春', initiative: '<span class="initiative-main-title">半島風土 × 族群共榮</span>以瑯嶠半島多元族群文化，結合原民智慧、客家農藝及先人開發路徑的故事，推動文化藝術展演及生活創新共好行動，展現南方半島的創生共榮風景。', content: `南國陽光灑落山海，映照瑯嶠半島多元的生態與人文風景。山麓原鄉承載部落文化與山林智慧，平原聚落延續農耕技藝與生活美學，沿林邊溪展開的客家聚落融合農藝與族群生活，亦展現出多元族群的祭典樂舞與信仰傳承，以族群記憶為脈絡，展現南方以自然為脈、以文化為光的半島風土。`, townships: { '屏東縣': ['恆春鎮', '枋寮鄉', '車城鄉', '滿州鄉', '枋山鄉', '春日鄉', '獅子鄉', '牡丹鄉'], '臺東縣': ['達仁鄉'] } }, 'E1': { title: 'E1-蘭陽歸園田', initiative: '<span class="initiative-main-title">食農 × 慢農旅</span>以冬山河為主軸，連結田園生活、慢旅文化與青年創意，打造自然、人文與產業共榮的永續聚落。', content: `雪山山脈環抱的蘭陽內陸，以湧泉灌溉綠野田疇，孕育蔥香與稻香共生的農業風景。泉水流經聚落與埤塘，映照出農村的生活韻律與人情溫度。以溫泉、食農與慢旅為核心，展現山泉流光、田園共生的永續鄉居風貌。`, townships: { '宜蘭縣': ['宜蘭市', '羅東鎮', '蘇澳鎮', '頭城鎮', '礁溪鄉', '壯圍鄉', '員山鄉', '冬山鄉', '五結鄉', '三星鄉', '大同鄉', '南澳鄉'], '新北市': ['坪林區', '雙溪區', '貢寮區', '烏來區'] } }, 'E2': { title: 'E2-東極觀海澳', initiative: '<span class="initiative-main-title">流域聚落 × 農創生活</span>以冷泉、港灣與山海地景為核心，融合在地漁業文化與青年創意，推動海洋城市的文化再生與永續觀光發展。', content: `雪山山脈延展至蘭陽平原，山河交織孕育豐饒農作與多樣生態。田園聚落與小河文化交錯成風景，展現米食、農村與人情共融的生活樣貌，凝聚自然、文化與產業共榮的創生力量。`, townships: { '宜蘭縣': ['羅東鎮', '蘇澳鎮', '頭城鎮', '礁溪鄉', '壯圍鄉', '冬山鄉', '五結鄉', '南澳鄉'], '新北市': ['雙溪區', '貢寮區'] } }, 'E3': { title: 'E3-太魯閣洄瀾', initiative: '<span class="initiative-main-title">山靈共感 × 文化再生</span>自然壯景與原民文化為靈魂，推動自然保育、文化復振與永續旅遊，重現「山在、族在、文化在」的生活信念。', content: `中央山脈綿延至太平洋，山海相依構築壯闊的洄瀾風景。雲崖聳立、溪谷縱橫，孕育太魯閣山林的靈氣與花蓮平原的生機。藍灣映照七星潭與港灣生活的光影，展現山海共融、自然人文交織的永續城市意象。`, townships: { '宜蘭縣': ['南澳鄉'], '南投縣': ['仁愛鄉'], '臺中市': ['和平區'], '花蓮縣': ['花蓮市', '新城鄉', '吉安鄉', '壽豐鄉', '秀林鄉'] } }, 'E4': { title: 'E4-群山伴縱谷', initiative: '<span class="initiative-main-title">土地共學 × 生態慢旅</span>稻米文化為核心，結合農業創新、食農教育與慢旅體驗，實踐人與土地共生的生活哲學。', content: `海岸山脈與中央山脈環抱的縱谷平原，肥沃土壤孕育出多樣作物與豐富農業景觀。四季分明的田野蘊藏閩、客、原等族群的共生文化，延展出食農教育、農事體驗與永續生活的多元樣貌。以土地為根、以自然為師，展開縱谷綠色創生的風貌。`, townships: { '臺東縣': ['關山鎮', '卑南鄉', '鹿野鄉', '池上鄉', '東河鄉', '長濱鄉', '海端鄉', '延平鄉', '達仁鄉', '金峰鄉'], '花蓮縣': ['鳳林鎮', '玉里鎮', '壽豐鄉', '光復鄉', '豐濱鄉', '瑞穗鄉', '富里鄉', '秀林鄉', '萬榮鄉', '卓溪鄉'], '高雄市': ['桃源區'] } }, 'E5': { title: 'E5-蔚藍東海岸', initiative: '<span class="initiative-main-title">山海療癒 × 太平洋生活</span>以山海共生的自然環境與原民文化為核心，推動永續農漁、工藝創生與慢旅文化，結合創意與專業，透過特色體驗活動、品牌經營，展現東岸生活的溫度與力量。', content: `中央山脈東麓迎向太平洋，晨曦灑落長濱、成功與東河的海岸線，描繪山海共生的東岸風景。沿岸聚落融合自然生態、漁業文化與原民智慧，串連紅藜、咖啡與工藝等在地產業，展現旭日之地蓬勃的創生能量與永續藍色生活力。`, townships: { '臺東縣': ['成功鎮', '卑南鄉', '東河鄉', '長濱鄉'], '花蓮縣': ['壽豐鄉', '光復鄉', '豐濱鄉', '瑞穗鄉'] } }, 'E6': { title: 'E6-大武知東嶼', initiative: '<span class="initiative-main-title">海島共生 × 文化永續</span>以達悟族海洋文化為核心，串聯傳統工藝、漁撈智慧與自然教育，推動文化傳承與永續生活的島。', content: `中央山脈向東延展至太平洋，依山傍海的地景串聯台東沿岸與離島，展現山海共構的壯闊氣勢。沿岸聚落融合藝術創作、原民生活與漁港文化，映照星光與潮聲交織的藍色意象。綠島、蘭嶼以火山島地形、珊瑚海岸與慢漁生活展現純粹的海洋韻律，構築自然、文化與產業共生的療癒島嶼風景。`, townships: { '屏東縣': ['牡丹鄉'], '臺東縣': ['臺東市', '卑南鄉', '太麻里鄉', '大武鄉', '延平鄉', '達仁鄉', '金峰鄉', '蘭嶼鄉', '綠島鄉'] } } };
+
+
+       // === 系統邏輯 ===
+       // 預先計算每個鄉鎮出現的次數與區域
+       const townshipMap = {}; // { "鄉鎮名": ["N1", "N2"] }
+      
+       function analyzeTownshipDistribution() {
+           Object.keys(areaData).forEach(areaKey => {
+               const townshipsByCounty = areaData[areaKey].townships;
+               if (!townshipsByCounty) return;
+
+
+               Object.values(townshipsByCounty).forEach(townList => {
+                   townList.forEach(town => {
+                       if (!townshipMap[town]) {
+                           townshipMap[town] = [];
+                       }
+                       if (!townshipMap[town].includes(areaKey)) {
+                           townshipMap[town].push(areaKey);
+                       }
+                   });
+               });
+           });
+       }
+      
+       // 執行分析
+       analyzeTownshipDistribution();
+
+
+       // DOM 元素
+       const mapContainer = document.getElementById('interactive-map');
+       const dialogModal = document.getElementById('dialog-modal');
+       const dialogTitle = document.getElementById('modal-title-text'); // Fixed ID reference
+       const dialogTableContent = document.getElementById('dialog-table-content');
+       const contentPanel = document.getElementById('content-panel');
+       const panelContent = document.getElementById('panel-content');
+       const tooltip = document.getElementById('tooltip');
+
+
+       // 鄉鎮 Popover 元素
+       const townshipPopover = document.createElement('div');
+       townshipPopover.id = 'township-popover';
+       document.body.appendChild(townshipPopover);
+
+
+       const BASE_MAP_URL = 'https://raw.githubusercontent.com/AngChenWu/ChatGPT-Line-Bot/refs/heads/main/Map_A3-4-05.png';
+       let currentSelectedArea = null;
+       let popoverTimeout;
+
+
+       function isMobile() {
+           return window.innerWidth < 1024;
+       }
+
+
+       // 產生倡議行動的 HTML
+       function buildInitiativeHtml(initiativeText) {
+           if (!initiativeText) return '';
+           return `
+               <div class="initiative-section">
+                   <h4 class="section-title">
+                       <span class="section-title-bar"></span>
+                       倡議行動
+                   </h4>
+                   <div class="initiative-box">
+                       <div class="initiative-content">
+                           ${initiativeText}
+                       </div>
+                   </div>
+               </div>
+           `;
+       }
+
+
+       // 產生涵蓋鄉鎮的 HTML 結構
+       function buildTownshipsHtml(townshipsData) {
+           if (!townshipsData) return '';
+
+
+           let html = `<div class="township-section">
+               <h4 class="section-title">
+                   <span class="section-title-bar"></span>
+                   涵蓋鄉鎮
+               </h4>`;
           
-          if (!originalCoords) return;
+           for (const [county, towns] of Object.entries(townshipsData)) {
+               html += `
+                   <div class="county-group">
+                       <span class="county-label">${county}</span>
+                       <div class="township-list">
+               `;
+              
+               towns.forEach(town => {
+                   // 檢查是否跨區
+                   const regions = townshipMap[town] || [];
+                   const isMulti = regions.length > 1;
+                   const multiClass = isMulti ? 'multi-zone' : '';
+                  
+                   // 為了 popover，我們將區域列表存入 data attribute
+                   // 這裡將 region 代號轉換為完整標題
+                   const regionTitles = regions.map(code => {
+                        return `<li>${areaData[code]?.title || code}</li>`;
+                   }).join('');
+                  
+                   html += `<span class="township-tag ${multiClass}"
+                                  onclick="showTownshipPopup(this, '${town}', '${regionTitles}')"
+                                  >${town}</span>`;
+               });
 
-          // 讀取原始座標，並按比例縮放，取整數
-          const scaledCoords = originalCoords.split(',')
-            .map(coord => Math.round(parseFloat(coord) * currentScale))
-            .join(',');
 
-          area.setAttribute('coords', scaledCoords);
-        });
-        console.log(`✅ 座標縮放完成。當前顯示寬度: ${currentWidth}px`);
-      }
-
-      // -------------------- 事件綁定 --------------------
-      
-      // 關閉 Modal 事件
-      modalCloseElement.onclick = function() {
-          modalElement.style.display = 'none';
-      }
-      // 點擊 Modal 外部區域也關閉
-      modalElement.onclick = function(e) {
-          if (e.target === modalElement) {
-              modalElement.style.display = 'none';
-          }
-      }
-
-      // 圖片載入和視窗調整大小事件
-      imageElement.onload = function() {
-          rescaleCoordinates();
-          updatePromptBasedOnView(); // 圖片載入後設置正確的初始提示
-      };
-      if (imageElement.complete) {
-          imageElement.onload();
-      }
-      
-      let lastViewWasMobile = isMobileView();
-      window.addEventListener('resize', function() {
-          // 在視窗大小改變時，重新計算縮放
-          clearTimeout(window.rescaleTimer);
-          window.rescaleTimer = setTimeout(rescaleCoordinates, 150);
+               html += `</div></div>`;
+           }
           
-          // 檢查是否跨越斷點，並更新提示文字
-          const currentIsMobile = isMobileView();
-          if (currentIsMobile !== lastViewWasMobile) {
-              updatePromptBasedOnView();
-              lastViewWasMobile = currentIsMobile;
-          }
-      });
-
-      // 綁定地圖區域事件
-      document.querySelectorAll("area").forEach((area) => {
-        area.addEventListener("mouseover", (e) => {
-            // 僅在桌面模式 (寬螢幕) 啟用 hover 效果
-            if (!isMobileView()) {
-                const content = e.target.getAttribute("title"); 
-                handleDesktopHover(content);
-            }
-        });
-        
-        area.addEventListener("mouseout", () => {
-            if (!isMobileView()) {
-                handleDesktopHover(desktopHoverText); 
-            }
-        });
-        
-        // 單擊事件：處理手機 Modal 或阻止無效連結
-        area.addEventListener("click", (e) => {
-            const href = e.target.getAttribute('href');
-            const content = e.target.getAttribute("title"); 
-
-            if (isMobileView()) {
-                e.preventDefault(); // 在手機上優先阻止跳轉
-                showMobileModal(content);
-                return; 
-            }
-
-            // 桌面點擊處理：阻止無效連結的跳轉 (保留 href="" 阻止 ERR_FILE_NOT_FOUND)
-            const isExternalLink = href && (
-                href.startsWith('http') || href.startsWith('ftp') || href.startsWith('mailto')
-            );
-
-            if (!isExternalLink) {
-                e.preventDefault();
-            }
-        });
-      });
+           html += `</div>`;
+           return html;
+       }
       
-      // 頁面載入時，設定初始的提示文字 (如果圖片已載入，此行會被 onload 覆蓋，以防萬一先設置一個)
-      updatePromptBasedOnView();
-      console.log("地圖互動腳本已載入。");
-    </script>
-  </body>
+       // 顯示鄉鎮 Popover
+       window.showTownshipPopup = function(element, townName, regionListHtml) {
+           // 阻止事件冒泡，避免觸發全域關閉
+           if (event) event.stopPropagation();
+          
+           const rect = element.getBoundingClientRect();
+          
+           townshipPopover.innerHTML = `
+               <div class="popover-title">${townName}</div>
+               <div>涵蓋廊道：</div>
+               <ul class="popover-list">${regionListHtml}</ul>
+           `;
+           townshipPopover.style.display = 'block';
+          
+           // 計算位置：在標籤正上方
+           const popoverHeight = townshipPopover.offsetHeight;
+           const popoverWidth = townshipPopover.offsetWidth;
+          
+           // 簡單的位置計算，確保不超出螢幕
+           let top = rect.top - popoverHeight - 10;
+           let left = rect.left + (rect.width / 2) - (popoverWidth / 2);
+          
+           if (top < 0) top = rect.bottom + 10; // 如果上方空間不足，改顯示在下方
+           if (left < 0) left = 10;
+           if (left + popoverWidth > window.innerWidth) left = window.innerWidth - popoverWidth - 10;
+
+
+           townshipPopover.style.top = `${top}px`;
+           townshipPopover.style.left = `${left}px`;
+          
+           // 延遲一點顯示 opacity 動畫
+           requestAnimationFrame(() => {
+               townshipPopover.style.opacity = '1';
+           });
+       }
+
+
+       // 隱藏鄉鎮 Popover
+       function hideTownshipPopup() {
+           townshipPopover.style.opacity = '0';
+           setTimeout(() => {
+               townshipPopover.style.display = 'none';
+           }, 200);
+       }
+
+
+       // 依據多邊形自動計算 viewBox 並產生右側/對話框中的放大地圖
+       function buildZoomSvg(areaId) {
+           const polygon = document.getElementById(areaId);
+           if (!polygon) return '';
+
+
+           const bbox = polygon.getBBox();
+           const padding = 150;
+           const viewBox = `${bbox.x - padding} ${bbox.y - padding} ${bbox.width + padding * 2} ${bbox.height + padding * 2}`;
+
+
+           return `
+               <div class="zoom-svg-container">
+                   <h4 class="section-title">
+                       <span class="section-title-bar"></span>
+                       區域特寫
+                   </h4>
+                   <svg viewBox="${viewBox}" class="w-full max-h-48 md:max-h-60 mx-auto rounded bg-white" xmlns="http://www.w3.org/2000/svg">
+                       <image href="${BASE_MAP_URL}" x="0" y="0" width="7107" height="9922" preserveAspectRatio="none" />
+                       <mask id="mask-${areaId}">
+                           <rect x="0" y="0" width="7107" height="9922" fill="white" />
+                           <use href="#${areaId}" fill="black" />
+                       </mask>
+                       <rect x="0" y="0" width="7107" height="9922" fill="black" opacity="0.1" mask="url(#mask-${areaId})" />
+                       <use href="#${areaId}" style="fill:none; stroke:#064e3b; stroke-width:20;"></use>
+                   </svg>
+               </div>`;
+       }
+
+
+       // 顯示內容主邏輯
+       function showContent(areaId) {
+           const data = areaData[areaId];
+           if (!data) return;
+
+
+           // 1. 隱藏之前的鄉鎮 popover
+           hideTownshipPopup();
+
+
+           let titleHtml = data.title;
+           const titleParts = data.title.split('-');
+           if (titleParts.length >= 2) {
+               const code = titleParts[0];
+               const name = titleParts.slice(1).join('-');
+               titleHtml = `<span class="title-capsule">${code}</span><span class="align-middle">${name}</span>`;
+           }
+
+
+           const initiativeHtml = buildInitiativeHtml(data.initiative);
+           const zoomSvgHtml = buildZoomSvg(areaId);
+           const townshipsHtml = buildTownshipsHtml(data.townships);
+
+
+           const fullContentHtml = `
+               <div class="animate-fade-in-up">
+                   <h3 class="text-2xl font-bold text-gray-800 mb-4 border-b-2 border-teal-600 pb-2 flex items-center">
+                       ${titleHtml}
+                   </h3>
+                   <div class="content-description text-gray-700 text-lg leading-relaxed mb-6">${data.content}</div>
+                  
+                   ${initiativeHtml}
+                   ${zoomSvgHtml}
+                   ${townshipsHtml}
+
+
+                   <div class="mt-8 pt-6 border-t border-gray-200"></div>
+               </div>
+           `;
+
+
+           if (isMobile()) {
+               dialogTitle.innerHTML = titleHtml;
+               dialogTableContent.innerHTML = `
+                   <div class="content-description text-gray-700 mb-4">${data.content}</div>
+                   ${initiativeHtml}
+                   ${zoomSvgHtml}
+                   ${townshipsHtml}
+               `;
+               dialogModal.classList.add('visible');
+               tooltip.classList.add('hidden');
+           } else {
+               panelContent.innerHTML = fullContentHtml;
+               contentPanel.scrollTop = 0;
+           }
+       }
+
+
+       function closeDialog() {
+           dialogModal.classList.remove('visible');
+       }
+
+
+       function updateTooltipPosition(event) {
+           tooltip.style.left = `${event.clientX + 10}px`;
+           tooltip.style.top = `${event.clientY + 10}px`;
+       }
+
+
+       document.addEventListener('DOMContentLoaded', () => {
+           const areas = mapContainer.querySelectorAll('.map-area');
+
+
+           areas.forEach(area => {
+               const areaName = area.getAttribute('data-name');
+               const areaId = area.id;
+
+
+               const handleSelect = (e) => {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   if (currentSelectedArea) currentSelectedArea.classList.remove('selected');
+                   area.classList.add('selected');
+                   currentSelectedArea = area;
+                   showContent(areaId);
+               };
+
+
+               area.addEventListener('click', handleSelect);
+
+
+               area.addEventListener('mouseover', (event) => {
+                   if (!isMobile()) {
+                       tooltip.textContent = areaName;
+                       tooltip.classList.remove('hidden');
+                       tooltip.style.opacity = '1';
+                       updateTooltipPosition(event);
+                   }
+               });
+
+
+               area.addEventListener('mousemove', (event) => {
+                   if (!isMobile()) updateTooltipPosition(event);
+               });
+
+
+               area.addEventListener('mouseout', () => {
+                   if (!isMobile()) {
+                       tooltip.style.opacity = '0';
+                       tooltip.classList.add('hidden');
+                   }
+               });
+           });
+
+
+           // 全域點擊事件：用於關閉鄉鎮 Popover
+           document.addEventListener('click', (event) => {
+               // 檢查點擊目標是否在 Popover 內部，如果不是則關閉
+               if (!townshipPopover.contains(event.target)) {
+                   hideTownshipPopup();
+               }
+              
+               // 關閉主 Modal (如果點擊遮罩層)
+               if (event.target === dialogModal) closeDialog();
+           });
+       });
+   </script>
+
+
+   <div class="fixed bottom-0 left-0 w-full z-50 pointer-events-none">
+       <div class="grass-container">
+           <svg class="grass-svg" style="fill:#ffffff;" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="500" height="70" viewBox="0 0 600 80" preserveAspectRatio="none" role="img">
+           <defs>
+               <linearGradient id="grassGradientBack" x1="0" y1="1" x2="0" y2="0">
+                   <stop offset="0%" stop-color="#ffffff" />
+                   <stop offset="100%" stop-color="#ffffff" />
+               </linearGradient>
+               <linearGradient id="grassGradientFront" x1="0" y1="1" x2="0" y2="0">
+                   <stop offset="0%" stop-color="#ffffff" />
+                   <stop offset="100%" stop-color="#ffffff" />
+               </linearGradient>
+           </defs>
+           <defs>
+               <path id="grass-shape" d="m57.272 57.878c0-1.0778 0.83265-1.445 1.8503-0.81598 1.0177 0.62898 1.8504 1.5108 1.8504 1.9595 0 0.4488-0.83265 0.81598-1.8504 0.81598-1.0177 0-1.8503-0.8818-1.8503-1.9595zm10.148-3.7238c-1.7596-8.0113-0.24968-8.3564 3.3681-0.76963 2.5338 5.3135 2.6182 6.4528 0.47863 6.4528-1.4292 0-3.1604-2.5574-3.8469-5.6833zm13.851 2.0857c2.1766-4.0671 5.3938-6.4834 6.7827-5.0945 1.5108 1.5108-3.7044 8.692-6.3124 8.692-1.7993 0-1.9163-0.89545-0.47013-3.5975zm137.99 0.59099c-1.6843-1.8611-3.0623-3.972-3.0623-4.6911 0-2.2367 6.9062 2.2651 8.0508 5.2478 1.4832 3.8651-1.2642 3.5584-4.9885-0.55688zm6.9214 0.14572c-0.55118-1.781-2.1904-5.9724-3.6426-9.3144-3.3995-7.8233-3.3258-8.8227 0.4217-5.7148 3.0392 2.5204 8.04 12.695 8.04 16.358 0 3.1738-3.7451 2.1414-4.819-1.3283zm6.6252-3.7007c-0.0242-3.8163-0.81091-10.246-1.7481-14.288-0.93715-4.0423-1.3484-7.7051-0.91389-8.1394 1.5769-1.5769 8.1822 15.656 8.4193 21.965 0.23988 6.3825 0.26645 6.3589 1.8355-1.6278 1.7388-8.8509 6.1827-16.876 9.3452-16.876 1.1031 0 1.5408 1.0408 0.97263 2.3129-0.56816 1.2721-2.9471 7.0866-5.2864 12.921-3.4002 8.4804-5.0884 10.614-8.4168 10.639-3.5751 0.02705-4.1695-0.94853-4.2074-6.9071zm12.071 5.0884c0.62897-1.0177 1.5108-1.8503 1.9596-1.8503 0.44878 0 0.81596 0.83265 0.81596 1.8503s-0.88178 1.8503-1.9595 1.8503c-1.0778 0-1.4449-0.83265-0.81598-1.8503zm17.856-3.7007c-1.0643-3.0531-1.6188-5.551-1.2322-5.551 0.38659 0 2.4816 2.498 4.6555 5.551 3.0801 4.3256 3.3521 5.551 1.2322 5.551-1.4963 0-3.5913-2.498-4.6557-5.551zm10.825 2.0816c0-1.9082-0.42537-6.2796-0.9453-9.7143l-0.94529-6.2449 3.6722 7.4014c4.4276 8.924 4.6842 12.027 0.99382 12.027-1.5265 0-2.7755-1.5612-2.7755-3.4694zm10.271-0.69388c1.4488-4.7542 6.182-10.639 8.5567-10.639 0.88065 0-0.0981 3.3306-2.1747 7.4014-4.065 7.9678-8.5109 10.224-6.3821 3.2381zm27.459-2.8902c-3.6859-8.8215-2.1409-9.9336 2.7672-1.9918 4.4103 7.1361 4.7579 8.6679 1.967 8.6679-1.0696 0-3.1999-3.0043-4.7343-6.6763zm9.0438-3.9632c-1.0751-5.8517-1.6454-10.972-1.2674-11.378 1.0528-1.1307 8.0677 15.105 8.1138 18.779 0.0231 1.781-1.0691 3.2381-2.4256 3.2381-1.542 0-3.1985-3.9868-4.4209-10.639zm9.7721 6.4762c2.4145-7.827 6.4598-14.34 8.9066-14.34 1.742 0 1.1286 2.6601-2.1336 9.2517-4.6337 9.363-9.1347 12.744-6.773 5.0884zm21.169 2.2037c0-1.0778 0.83265-1.445 1.8503-0.81598 1.0177 0.62898 1.8504 1.5108 1.8504 1.9595 0 0.4488-0.83265 0.81598-1.8504 0.81598-1.0177 0-1.8503-0.8818-1.8503-1.9595zm10.148-3.7238c-1.7596-8.0113-0.24968-8.3564 3.3681-0.76963 2.5338 5.3135 2.6182 6.4528 0.47863 6.4528-1.4292 0-3.1604-2.5574-3.8469-5.6833zm13.851 2.0857c2.1766-4.0671 5.3938-6.4834 6.7827-5.0945 1.5108 1.5108-3.7044 8.692-6.3124 8.692-1.7993 0-1.9163-0.89545-0.47013-3.5975zm-337.65-40.924c-0.32597 0.13625-0.94959 1.1273-1.9336 2.7695-1.5245 2.5442-3.7456 7.9566-4.9336 12.027l-2.1582 7.4023-1.7383-6.4766c-1.7349-6.4669-6.2452-12.953-9.0078-12.953-1.3174-1e-6 5.0052 16.135 9.6777 24.697 1.026 1.8799 1.4578 3.8254 0.96094 4.3223-0.49705 0.49682-1.8328-0.83255-2.9688-2.9551-3.5105-6.5595-5.8502-4.2535-2.8848 2.8438 2.5084 6.0037 2.5069 6.458-0.01953 4.3613-4.4602-3.7016-5.2607-0.76046-1.5234 5.5957 2.6279 4.4695 3.5687 5.0786 4.0684 2.6348 0.53049-2.5945 0.95104-2.7046 2.2852-0.59766 1.1371 1.7958 1.6851 0.61036 1.8027-3.8945l0.16992-6.4766 2.1719 5.8809c3.5029 9.4839 4.0215 8.5258 4.0215-7.4219 0-8.3124 0.64109-19.275 1.4238-24.363 0.84208-5.474 1.1292-7.6236 0.58594-7.3965zm10.297 6.6582c-0.80657-0.07368-2.801 2.2237-5.3438 6.752-3.0585 5.4467-3.9175 10.238-3.9941 22.283-0.06051 9.5128-0.2648 9.8075 0.8528 9.1168 0.99153-0.6127 2.655 1.5107 2.655-1.5328 0-5.7816 3.9895-15.085 8.8379-20.615 4.098-4.674 0.53736-3.987-4.7852 0.92383l-4.5117 4.1641 1.377-4.627c0.75702-2.5442 2.4832-7.3312 3.8359-10.639 1.5748-3.8506 1.7879-5.7612 1.0762-5.8262zm54.289 30.647c-5.9361-9.0667-5.1671-11.477 1.4006-4.3902l4.6536 5.0211-1.5724-5.4826c-0.86481-3.0154-2.4964-7.2092-3.6257-9.3195-3.3748-6.3057-2.2452-9.0535 1.677-4.0802 4.5553 5.7758 7.9345 17.516 6.4175 22.295-1.6717 5.267-3.3514 4.5084-8.9506-4.0437zm11.745-2.986c-6e-3 -5.8517-0.89903-13.84-1.9852-17.752-1.0862-3.9119-1.5127-7.5746-0.94775-8.1394 1.7588-1.7588 8.4003 14.911 8.6564 21.728 0.23988 6.3825 0.26643 6.3589 1.8355-1.6278 1.6956-8.6312 6.1644-16.876 9.1472-16.876 2.29 0 2.2662 0.66982-0.21719 6.1205-1.6358 3.5901-1.2802 5.9044 1.8503 12.041 2.1314 4.1778 3.8753 9.2887 3.8753 11.357 0 3.214-1.0964 3.718-7.5364 3.4657-6.3277-0.24795-7.3942-0.83939-6.6494-3.6873 0.48787-1.8656 0.1323-3.3921-0.79007-3.3921-0.92242 0-1.6771 1.6653-1.6771 3.7007 0 2.0559-1.2336 3.7007-2.7755 3.7007-2.1441 0-2.7778-2.4202-2.7859-10.639zm16.419 1.2252c-2.5523-7.6324-5.3068-11.102-5.3068-6.6837 0 5.0871 0.28708 5.9435 1.8503 5.5203 0.8141-0.22042 2.0203 1.7512 2.6804 4.3816 0.66018 2.6303 1.5799 4.4029 2.0438 3.9389 0.46388-0.4639-0.10658-3.6845-1.2678-7.1571zm8.4676 0.44015c-0.6595-4.7323-1.8585-11.727-2.6645-15.543-0.80596-3.8163-0.83436-6.9388-0.0631-6.9388 1.7565 0 7.4192 14.594 7.5626 19.491 0.0607 2.07 2.0098-0.54923 4.5211-6.0756 2.4281-5.3429 5.5834-9.7143 7.0119-9.7143 2.0043 0 1.6379 2.0067-1.6047 8.7891-2.3111 4.834-4.8019 10.864-5.5351 13.4-1.192 4.1237-1.0113 4.3444 1.7094 2.0864 2.5965-2.1548 3.0424-2.112 3.0424 0.29205 0 1.9787-1.9017 2.8171-6.3906 2.8171-6.1991 0-6.4265-0.25782-7.5896-8.6041zm39.396 5.3599c-0.51205-1.781-1.5833-4.8319-2.3807-6.7797-2.2783-5.5665 2.4124-1.8047 5.7162 4.5842 2.3592 4.578 2.3823 5.4335 0.20817 5.4335-1.434 0-3.0262-1.4571-3.5383-3.2381zm8.1563-7.2473c-2.4702-12.3-1.41-14.934 2.3701-5.8869 4.7184 11.306 5.4816 16.372 2.4517 16.372-1.8262 0-3.413-3.4472-4.8264-10.485zm9.83 5.397c1.549-6.3 6.0277-13.415 8.4445-13.415 2.4966 0 2.3587 0.61723-2.2617 10.127-4.5084 9.2792-8.1292 11.205-6.1827 3.2876z" />
+           </defs>
+
+
+           <!-- 後層草：顏色較深，做為背景層 -->
+           <g class="grass-layer grass-back" transform="matrix(1.6454 0 0 1.6454 -29.086 -18.779)">
+               <use href="#grass-shape" fill="url(#grassGradientBack)" opacity="0.95" />
+           </g>
+       </svg>
+       </div>
+       <div class="bg-white/30 backdrop-blur-sm text-white text-[10px] lg:text-xs flex flex-col lg:flex-row items-center justify-center gap-0.5 lg:gap-2 py-1 lg:py-1.5 pointer-events-auto">
+           <span class="block lg:inline">國家發展委員會地方創生獎勵金辦公室</span>
+           <span class="hidden lg:inline">｜</span>
+           <span class="block lg:inline">聯絡Email：im.ndc@tier.org.tw</span>
+       </div>
+   </div>
+</body>
 </html>
+
